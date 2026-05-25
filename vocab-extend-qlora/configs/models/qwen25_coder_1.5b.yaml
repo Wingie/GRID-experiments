@@ -1,0 +1,9 @@
+inherit: [base.yaml]
+
+model:
+  id: Qwen/Qwen2.5-Coder-1.5B-Instruct
+  short_name: qwen25_coder_1.5b
+  max_seq_len: 2048
+  # Approx published HumanEval pass@1 for reference in result tables.
+  reference_humaneval: 0.70
+  chat_template: true

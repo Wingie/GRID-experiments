@@ -1,0 +1,34 @@
+# Data and experiment artifacts
+data/
+results/*.json
+results/*.csv
+results/**/*.json
+*.gguf
+*.bin
+*.safetensors
+
+# Logging / experiment tracking
+wandb/
+runs/
+lightning_logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store

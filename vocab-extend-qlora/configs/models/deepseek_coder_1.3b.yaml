@@ -1,0 +1,8 @@
+inherit: [base.yaml]
+
+model:
+  id: deepseek-ai/deepseek-coder-1.3b-instruct
+  short_name: deepseek_coder_1.3b
+  max_seq_len: 2048
+  reference_humaneval: 0.65
+  chat_template: true

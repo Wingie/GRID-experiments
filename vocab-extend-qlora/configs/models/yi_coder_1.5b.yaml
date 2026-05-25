@@ -1,0 +1,9 @@
+inherit: [base.yaml]
+
+model:
+  id: 01-ai/Yi-Coder-1.5B-Chat
+  short_name: yi_coder_1.5b
+  max_seq_len: 2048
+  reference_humaneval: 0.64
+  chat_template: true
+  license: Apache-2.0           # Apache-2.0 alternative baseline

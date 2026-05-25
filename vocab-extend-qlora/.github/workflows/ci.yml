@@ -1,0 +1,35 @@
+# NOTE: GitHub only runs workflows from the repository-root `.github/workflows`.
+# While vocab-extend-qlora lives as a subdirectory of another repo this file does NOT
+# trigger; it activates once the subdirectory is extracted into its own repository
+# (e.g. via `git subtree split`). See the README "Repository layout" note.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install (CPU-only subset)
+        run: |
+          python -m pip install --upgrade pip
+          # CPU wheels for the test-able subset; heavy GPU deps (unsloth, bitsandbytes)
+          # are intentionally skipped in CI.
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install transformers datasets pyyaml numpy sacrebleu Levenshtein scikit-learn pandas tqdm
+          pip install ruff pyright pytest
+      - name: Ruff (lint + format check)
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+      - name: Pyright
+        run: pyright || true   # type-check is advisory while optional deps are absent
+      - name: Pytest
+        run: pytest -q

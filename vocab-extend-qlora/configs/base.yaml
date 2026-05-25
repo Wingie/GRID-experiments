@@ -1,0 +1,155 @@
+# Shared configuration. Model configs and experiment configs `inherit` this file
+# and deep-merge their overrides on top (see src/utils.py::load_config).
+
+seed: 42
+
+paths:
+  target_repo: data/target_repo        # populated by scripts/clone_target.sh
+  results_dir: results                 # all runs write JSON here
+  data_dir: data                       # prepared datasets, intermediate artifacts
+  dataset_dir: data/dataset            # HuggingFace dataset saved to disk
+  model_out_dir: data/models           # fine-tuned / merged model output
+  candidates_file: results/candidates.json
+  entities_file: results/entities.json
+  rqvae_ckpt: data/models/rqvae.pt
+  sid_assignments_file: results/sid_assignments.json
+
+logging:
+  level: INFO
+  use_wandb: false
+  wandb_project: vocab-extend-qlora
+
+# Source languages to learn from. Used by the repo file-walker.
+languages: [py, ts, tsx, js, jsx, rs, go, java, rb, sol]
+
+# ----------------------------------------------------------------------------- #
+# Phase 1: token mining
+# ----------------------------------------------------------------------------- #
+mining:
+  strategies: [identifiers, ngrams]    # add "gradient" to enable VEGAD-style selection
+  identifier_min_frequency: 5
+  ngram_sizes: [2, 3]
+  ngram_min_frequency: 25
+  top_n: 128                            # number of frequency-mined tokens to keep
+  top_n_sweep: [64, 128, 256, 512]      # used by ablations
+  gradient:
+    enabled: false
+    num_samples: 256                    # repo samples for the forward pass
+    candidate_pool: 1024                # mine this many, then rank by gradient signal
+
+# ----------------------------------------------------------------------------- #
+# Phase 2: semantic IDs (the novel contribution)
+# ----------------------------------------------------------------------------- #
+semantic_ids:
+  enabled: false                        # turned on by semid_* experiments
+  encoder_model: Salesforce/codet5p-110m-embedding
+  encoder_batch_size: 32
+  encoder_max_length: 512
+  # Weighted combination of the entity views used to build its embedding.
+  view_weights: { signature: 0.4, docstring: 0.2, body: 0.3, path: 0.1 }
+  # When the encoder model cannot be downloaded (offline / no GPU), fall back to a
+  # deterministic hashing + random-projection encoder so the pipeline still runs.
+  allow_offline_encoder_fallback: true
+  embedding_dim: 256                    # encoder output dim (after optional projection)
+
+  rqvae:
+    levels: 3                           # L: module -> class -> method-role
+    codebook_size: 64                   # K codes per level
+    latent_dim: 256
+    hidden_dim: 512
+    commitment_weight: 0.25
+    reconstruction_weight: 1.0
+    ema_decay: 0.99                     # EMA codebook updates
+    dead_code_threshold: 256            # reinit a code unused for this many steps
+    normalize_residuals: true
+    train_layer_wise: false
+    train_steps: 2000
+    batch_size: 256
+    lr: 1.0e-3
+
+  # Git co-change signal: smooth entity embeddings toward entities in files that
+  # change together in history, so co-evolving code lands in the same SID cluster.
+  # Requires a FULL clone (`scripts/clone_target.sh <url> full`); a shallow clone has
+  # no history and this becomes a no-op.
+  cochange:
+    enabled: false
+    alpha: 0.3                # blend weight: e' = (1-alpha)*e + alpha*neighbour_mean
+    max_commits: 2000         # cap history scanned for speed
+    max_files_per_commit: 50  # skip sweeping commits (refactors/formatting) as noise
+
+  # Special structural tokens added alongside the per-level code tokens.
+  structural_tokens: ["<SID_START>", "<SID_END>", "<SID_SEP>"]
+  # Task tokens for the multi-objective training mix.
+  task_tokens: ["<PREDICT_SID>", "<SID_TO_SIG>", "<FIM_PREFIX>", "<FIM_MIDDLE>", "<FIM_SUFFIX>"]
+
+# ----------------------------------------------------------------------------- #
+# Phase 3: tokenizer extension
+# ----------------------------------------------------------------------------- #
+extend:
+  # one of: random | mean | exp_weighted | codebook
+  #   mean         -> mean-of-subtokens (freq tokens)
+  #   exp_weighted -> AdaptiVocab-style exponentially weighted subtokens
+  #   codebook     -> SID tokens initialised from RQ-VAE codebook vectors (freq tokens use `mean`)
+  init_method: codebook
+  exp_weight_decay: 0.5                 # for exp_weighted init
+  modules_to_save: [embed_tokens, lm_head]
+
+# ----------------------------------------------------------------------------- #
+# Data preparation
+# ----------------------------------------------------------------------------- #
+data:
+  max_seq_len: 2048
+  eval_fraction: 0.1
+  stratify_by: extension
+  use_fim: true
+  fim_rate: 0.5                         # fraction of code chunks rendered as FIM
+  path_context_header: true             # prepend "# File: <path>" to each chunk
+  # Mix of training-data formats (must sum to ~1.0). Only used when semantic_ids.enabled.
+  sid_format_ratios: { raw: 0.7, sid_header: 0.2, sid_replace: 0.1 }
+  # Fraction of all training examples that are SID *task* examples (objectives 2-4)
+  # vs. plain causal-LM code. Only used when semantic_ids.enabled.
+  sid_task_fraction: 0.4
+  objective_weights:
+    next_token: 0.60
+    entity_sid: 0.15
+    sid_signature: 0.10
+    sid_completion: 0.15
+
+# ----------------------------------------------------------------------------- #
+# QLoRA fine-tuning
+# ----------------------------------------------------------------------------- #
+qlora:
+  lora_r: 32
+  lora_alpha: 64
+  lora_dropout: 0.0
+  lora_r_sweep: [8, 16, 32, 64]
+  target_modules: all-linear
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  precision: bf16                       # RTX 3090 has no hardware FP8
+  batch_size: 4
+  grad_accum: 4                         # effective batch 16
+  lr: 2.0e-4
+  epochs: 3
+  warmup_ratio: 0.05
+  lr_scheduler: cosine
+  optim: paged_adamw_8bit
+  gradient_checkpointing: true
+
+# ----------------------------------------------------------------------------- #
+# Evaluation
+# ----------------------------------------------------------------------------- #
+eval:
+  top_k: [1, 3]
+  completion_max_new_tokens: 256
+  num_completion_samples: 200           # held-out masked blocks to evaluate
+  latency_warmup: 5
+  latency_iters: 50
+
+# ----------------------------------------------------------------------------- #
+# Experiment toggles (overridden by configs/experiments/*.yaml)
+# ----------------------------------------------------------------------------- #
+extend_vocab: false
+use_semantic_ids: false
+do_finetune: false

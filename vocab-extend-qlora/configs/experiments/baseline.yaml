@@ -1,0 +1,7 @@
+# Condition 1: untouched base model. No vocab extension, no semantic IDs, no fine-tune.
+inherit: [base.yaml, models/qwen25_coder_1.5b.yaml]
+
+name: baseline
+extend_vocab: false
+use_semantic_ids: false
+do_finetune: false

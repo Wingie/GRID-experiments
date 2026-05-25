@@ -1,0 +1,11 @@
+# Condition 3: frequency-mined vocabulary extension, embeddings mean-initialised,
+# but no fine-tuning. Isolates the compression effect of the new tokens.
+inherit: [base.yaml, models/qwen25_coder_1.5b.yaml]
+
+name: vocab_only
+extend_vocab: true
+use_semantic_ids: false
+do_finetune: false
+
+extend:
+  init_method: mean
