@@ -1,0 +1,11 @@
+# @package _global_
+# Phase 7b: train the mmproj vision projection on collected game screenshots. Run:
+#   python -m rimworld_agent.vision.train_mmproj experiment=mmproj_train
+
+vision:
+  siglip_model: vit_so400m_patch14_siglip_384
+  tokens_per_frame: 256
+  epochs: 8
+  align_weight: 1.0
+  contrast_weight: 0.5
+  contrastive: true

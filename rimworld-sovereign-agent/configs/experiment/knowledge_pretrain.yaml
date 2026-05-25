@@ -1,0 +1,23 @@
+# @package _global_
+# Phase 7a: knowledge pre-training. Teach RimWorld vocabulary + Defs + mechanics with the
+# extended tokenizer and SID tokens, NO screenshots yet. Run:
+#   python -m rimworld_agent.training.train_qlora experiment=knowledge_pretrain
+
+extend_vocab: true
+semantic_ids:
+  enabled: true
+
+training:
+  # No gameplay data in this stage; weight the code/wiki/SID objectives.
+  training_mix:
+    xml_defs: 0.30
+    csharp_source: 0.20
+    wiki_text: 0.20
+    entity_to_sid: 0.10
+    sid_to_entity: 0.10
+    sid_hierarchy: 0.10
+    episode_replay: 0.0
+    action_prediction: 0.0
+    reasoning_only: 0.0
+  qlora:
+    epochs: 3

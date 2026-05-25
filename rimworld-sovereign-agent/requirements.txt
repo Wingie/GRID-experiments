@@ -1,0 +1,60 @@
+# Pinned-loose requirements for the full stack (needs CUDA for the training/vision stages).
+# For an offline / CPU-only subset (knowledge extraction, semantic-ID assignment, action
+# space, reward, episode schema, data prep, tests) you only need: torch (CPU), transformers,
+# hydra-core, omegaconf, lxml, requests, numpy, pandas, pyyaml, tqdm, pytest.
+#
+# vocab-extend-qlora is imported as a dependency and installed editable from the sibling
+# checkout (its package is importable as `src`):
+#   pip install -e ../vocab-extend-qlora
+
+# --- core ---
+torch>=2.1.0
+transformers>=4.40.0
+peft>=0.10.0
+bitsandbytes>=0.43.0
+datasets
+accelerate
+
+# --- config ---
+hydra-core>=1.3
+omegaconf>=2.3
+
+# --- knowledge extraction ---
+lxml
+beautifulsoup4
+requests
+tree-sitter>=0.21
+tree-sitter-c-sharp
+
+# --- vision (mmproj) ---
+timm
+Pillow
+mss
+
+# --- game interaction ---
+websockets
+
+# --- semantic IDs / clustering ---
+vector-quantize-pytorch
+scikit-learn
+
+# --- eval / viz ---
+matplotlib
+seaborn
+umap-learn
+pandas
+numpy
+tqdm
+
+# --- export ---
+llama-cpp-python
+
+# --- training accel (optional, CUDA only) ---
+# unsloth
+
+# --- tracking (optional) ---
+# wandb
+
+# --- dev ---
+pytest
+pyyaml
