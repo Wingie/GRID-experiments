@@ -1,0 +1,11 @@
+# Condition 4: frequency-mined vocabulary extension + QLoRA fine-tuning.
+# The established AdaptiVocab/VEGAD-style recipe.
+inherit: [base.yaml, models/qwen25_coder_1.5b.yaml]
+
+name: vocab_qlora
+extend_vocab: true
+use_semantic_ids: false
+do_finetune: true
+
+extend:
+  init_method: mean

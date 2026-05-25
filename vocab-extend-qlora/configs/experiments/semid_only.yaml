@@ -1,0 +1,14 @@
+# Condition 5: semantic-ID tokens added (RQ-VAE over code entities), codebook-projected
+# init, but no fine-tuning. Isolates what the SID tokens contribute before training.
+inherit: [base.yaml, models/qwen25_coder_1.5b.yaml]
+
+name: semid_only
+extend_vocab: true            # SID tokens are added to the tokenizer
+use_semantic_ids: true
+do_finetune: false
+
+semantic_ids:
+  enabled: true
+
+extend:
+  init_method: codebook

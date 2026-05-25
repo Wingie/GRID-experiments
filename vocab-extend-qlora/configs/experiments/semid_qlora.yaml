@@ -1,0 +1,14 @@
+# Condition 6: the full pipeline. Frequency-mined tokens + semantic-ID tokens +
+# codebook-projected init + multi-objective QLoRA fine-tuning.
+inherit: [base.yaml, models/qwen25_coder_1.5b.yaml]
+
+name: semid_qlora
+extend_vocab: true
+use_semantic_ids: true
+do_finetune: true
+
+semantic_ids:
+  enabled: true
+
+extend:
+  init_method: codebook

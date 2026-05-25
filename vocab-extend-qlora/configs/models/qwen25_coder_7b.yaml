@@ -1,0 +1,13 @@
+inherit: [base.yaml]
+
+model:
+  id: Qwen/Qwen2.5-Coder-7B-Instruct
+  short_name: qwen25_coder_7b
+  max_seq_len: 2048           # 4096 is tight for 7B QLoRA on a 3090; bump with care
+  reference_humaneval: 0.88
+  chat_template: true
+
+# 7B is the sweet spot for the 3090 but leaves less headroom; trim the effective batch.
+qlora:
+  batch_size: 2
+  grad_accum: 8

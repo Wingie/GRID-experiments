@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vocab-extend-qlora"
+version = "0.1.0"
+description = "Tokenizer vocabulary extension + QLoRA + hierarchical semantic IDs for codebase-specific small language models on a single RTX 3090."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "vocab-extend-qlora contributors" }]
+keywords = [
+    "llm",
+    "qlora",
+    "tokenizer",
+    "semantic-ids",
+    "rq-vae",
+    "code-generation",
+]
+
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "bitsandbytes>=0.43.0",
+    "datasets",
+    "accelerate",
+    "sentence-transformers",
+    "tree-sitter>=0.21",
+    "sacrebleu",
+    "Levenshtein",
+    "scikit-learn",
+    "pandas",
+    "numpy",
+    "pyyaml",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Heavy / hardware-specific extras. Kept optional so the CPU-only pipeline and the
+# test-suite install cleanly without CUDA, Unsloth, or a C++ toolchain.
+train = ["unsloth"]
+grammars = [
+    "tree-sitter-python",
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    "tree-sitter-rust",
+    "tree-sitter-go",
+    "tree-sitter-java",
+]
+viz = ["matplotlib", "seaborn", "umap-learn", "jupyter"]
+export = ["llama-cpp-python"]
+track = ["wandb"]
+quant = ["vector-quantize-pytorch"]
+dev = ["ruff", "pyright", "pytest", "pre-commit"]
+
+[project.urls]
+Homepage = "https://github.com/wingie/vocab-extend-qlora"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # line length handled by formatter; long config strings allowed
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = false  # heavy optional deps (unsloth, tree_sitter_*) may be absent
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

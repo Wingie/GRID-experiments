@@ -1,0 +1,7 @@
+# Condition 2: QLoRA fine-tune on the target repo, original tokenizer untouched.
+inherit: [base.yaml, models/qwen25_coder_1.5b.yaml]
+
+name: qlora_only
+extend_vocab: false
+use_semantic_ids: false
+do_finetune: true
