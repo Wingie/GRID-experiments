@@ -179,6 +179,11 @@ class ResidualVQVAE(nn.Module):
             for _ in range(c.levels)
         )
 
+    @property
+    def device(self) -> torch.device:
+        """Device the model's parameters live on (cuda after ``train_rqvae``)."""
+        return next(self.parameters()).device
+
     def quantize_latent(self, z: torch.Tensor, update: bool = True):
         """Residual quantisation loop. Returns (z_q, indices[B,L], commitment_loss)."""
         residual = z
@@ -197,6 +202,7 @@ class ResidualVQVAE(nn.Module):
         return z_q, torch.stack(indices, dim=1), commitment / len(self.quantizers)
 
     def forward(self, x: torch.Tensor, update: bool = True):
+        x = x.to(self.device)
         z = self.encoder(x)
         z_q, indices, commitment = self.quantize_latent(z, update=update)
         recon = self.decoder(z_q)
@@ -217,14 +223,17 @@ class ResidualVQVAE(nn.Module):
     def encode_to_ids(self, x: torch.Tensor) -> torch.Tensor:
         """Map embeddings ``[N, input_dim]`` to discrete code sequences ``[N, L]``."""
         self.eval()
-        z = self.encoder(x)
+        z = self.encoder(x.to(self.device))
         _, indices, _ = self.quantize_latent(z, update=False)
         return indices
 
     @torch.no_grad()
     def codebook_vectors(self) -> torch.Tensor:
-        """Stacked code embeddings ``[L, K, latent_dim]`` (for tokenizer init)."""
-        return torch.stack([q.codebook.detach() for q in self.quantizers], dim=0)
+        """Stacked code embeddings ``[L, K, latent_dim]`` (for tokenizer init).
+
+        Returned on CPU so downstream tokenizer-init math is device-independent.
+        """
+        return torch.stack([q.codebook.detach().cpu() for q in self.quantizers], dim=0)
 
     def codebook_usage(self) -> list[float]:
         """Fraction of codes used per level (collapse diagnostic)."""
