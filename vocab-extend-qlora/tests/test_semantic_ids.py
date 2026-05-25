@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
 
 from src.semantic_ids.assign_ids import SemanticIDVocab, code_width, sid_token  # noqa: E402
-from src.semantic_ids.extract_entities import extract_from_file  # noqa: E402
+from src.semantic_ids.extract_entities import CodeEntity, extract_from_file  # noqa: E402
 from src.utils import RepoFile, load_config  # noqa: E402
 
 CONFIGS = pathlib.Path(__file__).parents[1] / "configs"
@@ -138,6 +138,65 @@ def test_rqvae_shapes_and_training():
     rc = RQVAEConfig.from_cfg(cfg)
     assert rc.levels == 3 and rc.codebook_size == 16
     assert isinstance(model, ResidualVQVAE)
+
+
+def test_parse_git_log():
+    from src.semantic_ids.cochange import parse_git_log
+
+    text = "__COMMIT__\na.py\nb.py\n__COMMIT__\nb.py\nc.py\n"
+    commits = parse_git_log(text)
+    assert commits == [{"a.py", "b.py"}, {"b.py", "c.py"}]
+
+
+def test_build_cochange_graph_is_row_normalised():
+    from src.semantic_ids.cochange import build_cochange_graph
+
+    commits = [{"a.py", "b.py"}, {"a.py", "b.py"}, {"a.py", "c.py"}]
+    graph = build_cochange_graph(commits)
+    # a co-changes with b twice and c once -> normalised to 2/3, 1/3
+    assert abs(graph["a.py"]["b.py"] - 2 / 3) < 1e-6
+    assert abs(graph["a.py"]["c.py"] - 1 / 3) < 1e-6
+    assert abs(sum(graph["a.py"].values()) - 1.0) < 1e-6
+
+
+def test_build_cochange_graph_skips_huge_commits():
+    from src.semantic_ids.cochange import build_cochange_graph
+
+    huge = {f"f{i}.py" for i in range(60)}
+    graph = build_cochange_graph([huge], max_files_per_commit=50)
+    assert graph == {}
+
+
+def test_cochange_smoothing_pulls_toward_neighbours():
+    import numpy as np
+
+    from src.semantic_ids.cochange import cochange_smoothing
+
+    # two entities in two files that always co-change; orthogonal start embeddings
+    e1 = CodeEntity(name="A", kind="function", file_path="a.py", body="", signature="")
+    e2 = CodeEntity(name="B", kind="function", file_path="b.py", body="", signature="")
+    emb = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    graph = {"a.py": {"b.py": 1.0}, "b.py": {"a.py": 1.0}}
+    out = cochange_smoothing([e1, e2], emb, graph, alpha=0.5, repo_root=".")
+    # smoothed embeddings move toward each other (cosine similarity increases)
+    before = float(emb[0] @ emb[1])
+    after = float(out[0] @ out[1])
+    assert after > before
+    # output stays unit-normalised and same shape
+    assert out.shape == emb.shape
+    assert abs(np.linalg.norm(out[0]) - 1.0) < 1e-5
+
+
+def test_cochange_disabled_is_noop():
+    import numpy as np
+
+    from src.semantic_ids.cochange import maybe_apply_cochange
+
+    e = CodeEntity(name="A", kind="function", file_path="a.py", body="", signature="")
+    emb = np.random.default_rng(0).standard_normal((1, 4)).astype("float32")
+    out, info = maybe_apply_cochange([e], emb, {"semantic_ids": {"cochange": {"enabled": False}}})
+    assert info == {"enabled": False}
+    assert np.allclose(out, emb)
 
 
 def test_rqvae_dead_code_reinit_runs():

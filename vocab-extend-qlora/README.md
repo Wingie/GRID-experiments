@@ -81,15 +81,36 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install transformers datasets pyyaml numpy sacrebleu Levenshtein scikit-learn pandas tqdm pytest
 ```
 
+## Works on any codebase
+
+The pipeline is repository-agnostic: point it at **any git URL** and it shallow-clones
+the working tree, filters to the 10 supported languages, and learns a vocabulary + SIDs
+specific to that codebase. A shallow clone is all you need for the core objectives
+(vocab mining works on the current token distribution, semantic IDs are extracted from
+the live AST). Pass `full` to also mine **git history** for the co-change signal below.
+
 ## Quick start
 
 ```bash
 # 1. Clone the codebase to learn from (any git URL; default is a sample repo).
-scripts/clone_target.sh https://github.com/wingie/agentosaurus
+scripts/clone_target.sh https://github.com/wingie/agentosaurus          # shallow (default)
+# scripts/clone_target.sh https://github.com/wingie/agentosaurus full   # full history (co-change)
 
 # 2. Run the full pipeline for one experiment condition.
 scripts/run_all.sh configs/experiments/semid_qlora.yaml
+# scripts/run_all.sh configs/experiments/semid_qlora.yaml <url> full    # with co-change history
 ```
+
+### Git co-change signal (optional)
+
+Functions that change together in the same commit are usually semantically related,
+even when their names differ. With a full clone and
+`semantic_ids.cochange.enabled=true`, we mine a file-level co-change graph from history
+and **smooth entity embeddings toward their co-changing neighbours** before the RQ-VAE
+quantises them, so co-evolving code is more likely to share a semantic-ID cluster. This
+is *additional signal*, not a replacement source — commit messages / PR text are natural
+language and are deliberately **not** mined into the code-token vocabulary. With a
+shallow clone (no history) the smoothing is a safe no-op.
 
 Or step by step:
 
@@ -123,10 +144,11 @@ Six configs in `configs/experiments/` isolate each contribution:
    `frequency × sub-token count`, plus frequent sub-token n-grams (AdaptiVocab-style),
    plus an optional gradient-based selector (VEGAD-style).
 2. **Semantic IDs** (`src/semantic_ids/`) — tree-sitter (with a stdlib-`ast` fallback for
-   Python) extracts entities; a code encoder embeds them; a small **RQ-VAE**
-   (`rqvae.py`, EMA codebooks + dead-code reinit) quantises each into an `L`-tuple of
-   codes; `assign_ids.py` formats them as special tokens; `inject_ids.py` builds the
-   training formats and task objectives.
+   Python) extracts entities; a code encoder embeds them; an optional **git co-change**
+   pass (`cochange.py`) smooths embeddings toward co-evolving entities; a small
+   **RQ-VAE** (`rqvae.py`, EMA codebooks + dead-code reinit) quantises each into an
+   `L`-tuple of codes; `assign_ids.py` formats them as special tokens; `inject_ids.py`
+   builds the training formats and task objectives.
 3. **Tokenizer extension** (`src/extend_tokenizer.py`) — adds freq tokens
    (`add_tokens`) and SID tokens (`add_special_tokens`), resizes embeddings, and
    initialises new rows via mean-of-subtokens, exponentially-weighted, or
@@ -157,7 +179,7 @@ hierarchical consistency, SID prediction top-1/3 per level, novel-entity general
 lift over chance.
 
 **Table 5 — Ablations**: vocab size, init method, LoRA rank, `modules_to_save`,
-selection strategy, RQ-VAE `L`/`K`.
+selection strategy, RQ-VAE `L`/`K`, and co-change `alpha` (0 = off).
 
 **Figure 1** — t-SNE/UMAP of the codebook (`notebooks/02`). **Figure 2** — class→method
 SID hierarchy tree.

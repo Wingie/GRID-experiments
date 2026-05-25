@@ -67,6 +67,16 @@ semantic_ids:
     batch_size: 256
     lr: 1.0e-3
 
+  # Git co-change signal: smooth entity embeddings toward entities in files that
+  # change together in history, so co-evolving code lands in the same SID cluster.
+  # Requires a FULL clone (`scripts/clone_target.sh <url> full`); a shallow clone has
+  # no history and this becomes a no-op.
+  cochange:
+    enabled: false
+    alpha: 0.3                # blend weight: e' = (1-alpha)*e + alpha*neighbour_mean
+    max_commits: 2000         # cap history scanned for speed
+    max_files_per_commit: 50  # skip sweeping commits (refactors/formatting) as noise
+
   # Special structural tokens added alongside the per-level code tokens.
   structural_tokens: ["<SID_START>", "<SID_END>", "<SID_SEP>"]
   # Task tokens for the multi-objective training mix.

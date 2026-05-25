@@ -1,14 +1,16 @@
 #!/bin/bash
 # Full experiment pipeline for one experiment config.
-# Usage: scripts/run_all.sh [configs/experiments/<exp>.yaml] [target-git-url]
+# Usage: scripts/run_all.sh [configs/experiments/<exp>.yaml] [target-git-url] [depth]
+#   depth defaults to 1 (shallow). Use "full" to mine git co-change history.
 set -euo pipefail
 
 CONFIG="${1:-configs/experiments/semid_qlora.yaml}"
 TARGET_URL="${2:-https://github.com/wingie/agentosaurus}"
+DEPTH="${3:-1}"
 VARIANT="$(basename "$CONFIG" .yaml)"
 
-echo "==> [0/8] Clone target repo"
-scripts/clone_target.sh "$TARGET_URL"
+echo "==> [0/8] Clone target repo (depth=$DEPTH)"
+scripts/clone_target.sh "$TARGET_URL" "$DEPTH"
 
 echo "==> [1/8] Mine candidate tokens"
 python -m src.mine_tokens "$CONFIG"

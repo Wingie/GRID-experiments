@@ -153,6 +153,11 @@ def embed_entities(entities: list[CodeEntity], cfg: dict) -> tuple[np.ndarray, b
     combined = (flat_emb * w[None, :, None]).sum(axis=1)
     norms = np.linalg.norm(combined, axis=1, keepdims=True)
     combined = combined / np.clip(norms, 1e-8, None)
+
+    # Optional: pull co-changing entities together before quantisation.
+    from src.semantic_ids.cochange import maybe_apply_cochange
+
+    combined, _cochange_info = maybe_apply_cochange(entities, combined.astype(np.float32), cfg)
     log.info("Embedded %d entities -> dim %d (real_encoder=%s)", len(entities), dim, is_real)
     return combined.astype(np.float32), is_real
 
