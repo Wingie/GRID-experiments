@@ -1,0 +1,19 @@
+# @package _global_
+# Step 9: record 50-100 bootstrap episodes with the RSID-only model (or random play). No
+# training — these episodes exist only to give the WRITE RQ-VAE co-occurrence data
+# (gotcha #11). Run:
+#   python -m rimworld_agent.training.self_play experiment=bootstrap
+
+game:
+  scenario: crashlanded
+  difficulty: peaceful
+
+self_play:
+  iterations: 1
+  episodes_per_iter: 60
+  bootstrap_random: true     # random play (or set false to use the Phase-1 RSID model)
+  train: false               # record only; do not fine-tune on bootstrap play
+  use_vision: false
+
+eval:
+  episode_length: 150

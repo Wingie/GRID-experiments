@@ -81,12 +81,11 @@ semantic_ids:
   allow_offline_encoder_fallback: true
   # Weighted views combined into each entity embedding (game-specific).
   view_weights: { def: 0.5, label: 0.2, csharp: 0.2, wiki: 0.1 }
-  structural_tokens: ["<SID_START>", "<SID_END>", "<SID_SEP>"]
-  task_tokens: ["<PREDICT_SID>", "<SID_TO_SIG>", "<FIM_PREFIX>", "<FIM_MIDDLE>", "<FIM_SUFFIX>"]
-  viz_color_by: level1     # level1 | category
   viz_method: umap         # umap | tsne | pca
+  # Shared RQ-VAE defaults; READ and WRITE inherit these unless overridden below
+  # (gotcha #12: both families share architecture, differ only in training data).
   rqvae:
-    levels: 3              # Category -> SubCategory -> Item  (=> 3*64=192 SID tokens)
+    levels: 3              # => 3*64 = 192 per-level SID tokens per family
     codebook_size: 64
     latent_dim: 256
     hidden_dim: 512
@@ -99,6 +98,30 @@ semantic_ids:
     train_steps: 2000
     batch_size: 256
     lr: 1.0e-3
+  # READ RQ-VAE: "what IS this entity?" (taxonomy / structural similarity). Always trainable.
+  read:
+    contrastive_strength: 0.3   # pull toward category centroid before quantising (0 = off)
+    rqvae:
+      levels: 3
+      codebook_size: 64
+      latent_dim: 256
+      hidden_dim: 512
+      train_steps: 2000
+      batch_size: 256
+      lr: 1.0e-3
+  # WRITE RQ-VAE: "what is this USED WITH?" (workflow / co-occurrence). Needs gameplay first
+  # (gotcha #11): trained only after bootstrap episodes exist under paths.episodes_dir.
+  write:
+    enabled: true
+    cooccurrence_window: 5
+    rqvae:
+      levels: 3
+      codebook_size: 64
+      latent_dim: 256
+      hidden_dim: 512
+      train_steps: 2000
+      batch_size: 256
+      lr: 1.0e-3
 
 # --------------------------------------------------------------------------- #
 # Phase 3: vision (mmproj)
@@ -114,8 +137,9 @@ vision:
   align_weight: 1.0
   contrast_weight: 0.5
   contrastive: true
-  sid_embedding_path: data/models/sid_embeddings.pt
-  sid_index_path: results/sid_index.json
+  # Vision is perception -> align to READ SID embeddings.
+  rsid_embedding_path: data/models/rsid_embeddings.pt
+  rsid_index_path: results/rsid_index.json
 
 # --------------------------------------------------------------------------- #
 # Phase 4: game interaction
@@ -131,14 +155,17 @@ game:
 training:
   max_seq_len: 4096
   fim_rate: 0.5
-  # Multi-source training mix (project spec §6a; must sum to ~1.0).
+  # Multi-source training mix (project spec §6a; must sum to ~1.0). Dual-SID aware.
   training_mix:
-    xml_defs: 0.15
-    csharp_source: 0.10
+    xml_defs: 0.12
+    csharp_source: 0.08
     wiki_text: 0.10
-    entity_to_sid: 0.05
-    sid_to_entity: 0.05
-    sid_hierarchy: 0.05
+    entity_to_rsid: 0.04
+    rsid_to_entity: 0.04
+    rsid_hierarchy: 0.02
+    entity_to_wsid: 0.04
+    wsid_sequence: 0.04
+    wsid_to_action: 0.02
     episode_replay: 0.30
     action_prediction: 0.10
     reasoning_only: 0.10

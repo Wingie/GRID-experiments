@@ -29,8 +29,8 @@ def _build_torch_dataset():
             self.root = Path(cfg_get(cfg, "paths.screenshots_dir", "data/screenshots"))
             self.contrastive = cfg_get(cfg, "vision.contrastive", True)
             self.records = sorted(self.root.glob("*.json"))
-            # def_name -> SID-table row index, supplied alongside sid_embeddings.
-            self.sid_index = json.loads(Path(cfg_get(cfg, "vision.sid_index_path")).read_text())
+            # def_name -> RSID-table row index, supplied alongside the RSID embeddings.
+            self.sid_index = json.loads(Path(cfg_get(cfg, "vision.rsid_index_path")).read_text())
             if not self.records:
                 log.warning("no screenshot/state pairs under %s", self.root)
 

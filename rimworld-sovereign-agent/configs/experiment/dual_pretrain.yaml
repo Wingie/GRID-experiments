@@ -1,0 +1,15 @@
+# @package _global_
+# Step 11: retrain QLoRA with BOTH RSID + WSID data (after the WRITE codebook exists and
+# bootstrap episodes are recorded). This is the full dual-SID training mix. Run:
+#   python -m rimworld_agent.training.train_qlora experiment=dual_pretrain
+
+extend_vocab: true
+semantic_ids:
+  enabled: true
+  write:
+    enabled: true
+
+training:
+  # full dual mix (base default already sums to 1.0)
+  qlora:
+    epochs: 3

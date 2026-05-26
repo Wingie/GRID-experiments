@@ -25,12 +25,18 @@ from rimworld_agent.utils import cfg_get, ensure_dir, ensure_veq_importable, get
 log = get_logger("prepare_data")
 
 DEFAULT_MIX = {
-    "xml_defs": 0.15,
-    "csharp_source": 0.10,
+    "xml_defs": 0.12,
+    "csharp_source": 0.08,
     "wiki_text": 0.10,
-    "entity_to_sid": 0.05,
-    "sid_to_entity": 0.05,
-    "sid_hierarchy": 0.05,
+    # READ SID training
+    "entity_to_rsid": 0.04,
+    "rsid_to_entity": 0.04,
+    "rsid_hierarchy": 0.02,
+    # WRITE SID training
+    "entity_to_wsid": 0.04,
+    "wsid_sequence": 0.04,
+    "wsid_to_action": 0.02,
+    # gameplay
     "episode_replay": 0.30,
     "action_prediction": 0.10,
     "reasoning_only": 0.10,
@@ -38,9 +44,9 @@ DEFAULT_MIX = {
 
 
 # --------------------------------------------------------------------------- #
-# Gameplay formats (spec §6c)
+# Gameplay formats (spec §6c): RSIDs describe what is SEEN, WSIDs plan what to DO.
 # --------------------------------------------------------------------------- #
-def render_game_state(state: GameState, visible_sids: list[str] | None = None) -> str:
+def render_game_state(state: GameState, visible_rsids: list[str] | None = None) -> str:
     colonists = ", ".join(
         f"{c.name} ({c.job}, mood {int(c.mood * 100)}%)" for c in state.colonists
     )
@@ -48,7 +54,7 @@ def render_game_state(state: GameState, visible_sids: list[str] | None = None) -
     research = ", ".join(f"{k} {int(v * 100)}%" for k, v in state.research_progress.items())
     quests = ", ".join(f"{q.get('name')} ({q.get('progress')})" for q in state.quests_active)
     threats = ", ".join(t.get("name", "?") for t in state.threats) or "None"
-    sids = " ".join(visible_sids or [])
+    rsids = " ".join(visible_rsids or [])
     return (
         "<GAME_STATE>\n"
         f"  Season: {state.season}, Day {state.day}\n"
@@ -56,23 +62,26 @@ def render_game_state(state: GameState, visible_sids: list[str] | None = None) -
         f"  Resources: {resources}\n"
         f"  Research: {research}\n"
         f"  Active Quests: {quests}\n"
-        f"  Visible entities: {sids}\n"
+        f"  Visible entities (READ): {rsids}\n"
         f"  Threats: {threats}\n"
         "</GAME_STATE>"
     )
 
 
 def _render_actions(step) -> str:
+    """Render the action block, annotating each action with its WRITE SID when available."""
+    wsids = list(getattr(step, "action_wsids", []))
     lines = ["<ACTIONS>"]
     for i, a in enumerate(step.actions, 1):
         param_str = ", ".join(f"{k}={v}" for k, v in a.params.items())
-        lines.append(f"  <ACTION_{i}>{a.action}({param_str}) — {a.reason}</ACTION_{i}>")
+        wsid = f"{wsids[i - 1]}: " if i - 1 < len(wsids) else ""
+        lines.append(f"  <ACTION_{i}>{a.action}({param_str}) — {wsid}{a.reason}</ACTION_{i}>")
     lines.append("</ACTIONS>")
     return "\n".join(lines)
 
 
 def format_episode_replay(step) -> str:
-    state = render_game_state(step.game_state, step.visible_sids)
+    state = render_game_state(step.game_state, step.visible_rsids)
     screenshots = "<SCREENSHOTS>\n  <VISION_START>" + "<FRAME_SEP>".join(
         Path(s).name for s in step.screenshots
     ) + "<VISION_END>\n</SCREENSHOTS>"
@@ -81,31 +90,38 @@ def format_episode_replay(step) -> str:
 
 
 def format_action_prediction(step) -> str:
-    """State -> actions, no screenshots (teaches planning from structured state alone)."""
-    return "\n".join([render_game_state(step.game_state, step.visible_sids), _render_actions(step)])
+    """State (with RSIDs) -> actions (with WSIDs); teaches planning from structured state."""
+    return "\n".join([render_game_state(step.game_state, step.visible_rsids), _render_actions(step)])
 
 
 def format_reasoning_only(step) -> str:
     return "\n".join(
-        [render_game_state(step.game_state, step.visible_sids), f"<REASONING>\n  {step.reasoning}\n</REASONING>"]
+        [render_game_state(step.game_state, step.visible_rsids), f"<REASONING>\n  {step.reasoning}\n</REASONING>"]
     )
 
 
 # --------------------------------------------------------------------------- #
-# Semantic-ID task formats (spec §6a)
+# Dual semantic-ID task formats (spec §6a)
 # --------------------------------------------------------------------------- #
-def format_entity_to_sid(assign: dict) -> str:
-    return f"{assign['def_type']} {assign['def_name']}: {assign['label']} -> {assign['sid_sequence']}"
+def format_entity_to_rsid(a: dict) -> str:
+    return f"{a['def_type']} {a['def_name']}: {a['label']} -> {a['rsid_sequence']}"
 
 
-def format_sid_to_entity(assign: dict) -> str:
-    return f"{assign['sid_sequence']} -> {assign['def_name']}, {assign.get('subcategory', '')}, {assign['label']}"
+def format_rsid_to_entity(a: dict) -> str:
+    return f"{a['rsid_sequence']} -> {a['def_name']}, {a.get('subcategory', '')}, {a['label']}"
 
 
-def format_sid_hierarchy(assign: dict, siblings: list[str]) -> str:
-    prefix = assign["sid_inline"].rsplit("<SID_L", 1)[0] if "<SID_L" in assign["sid_inline"] else ""
-    members = ", ".join(siblings[:8])
-    return f"{prefix}* members: {members}"
+def format_rsid_hierarchy(a: dict, siblings: list[str]) -> str:
+    prefix = a["rsid_inline"].rsplit("<RSID_L", 1)[0] if "<RSID_L" in a["rsid_inline"] else ""
+    return f"{prefix}* members: {', '.join(siblings[:8])}"
+
+
+def format_entity_to_wsid(a: dict) -> str:
+    return f"{a['def_name']} in build context -> {a['wsid_sequence']}"
+
+
+def format_wsid_to_action(a: dict) -> str:
+    return f"{a['wsid_sequence']} -> order_build({a['def_name']})"
 
 
 # --------------------------------------------------------------------------- #
@@ -155,32 +171,40 @@ def build_examples(cfg) -> list[dict]:
     add("csharp_source", _fim_examples_from_dir(cfg_get(cfg, "paths.csharp_source_dir", "data/rimworld_source"), "*.cs", fim_rate, rng))
     add("wiki_text", _fim_examples_from_dir(cfg_get(cfg, "paths.wiki_dir", "data/rimworld_wiki"), "*.md", fim_rate, rng))
 
-    # Semantic-ID tasks (needs precomputed assignments)
+    # Dual semantic-ID tasks (needs precomputed assignments)
     sid_file = Path(cfg_get(cfg, "paths.sid_assignments_file", "results/sid_assignments.json"))
     if sid_file.exists():
         import json
 
         data = json.loads(sid_file.read_text())
         assigns = list(data["assignments"].values())
-        add("entity_to_sid", [format_entity_to_sid(a) for a in assigns])
-        add("sid_to_entity", [format_sid_to_entity(a) for a in assigns])
+        # READ tasks (all entities)
+        add("entity_to_rsid", [format_entity_to_rsid(a) for a in assigns])
+        add("rsid_to_entity", [format_rsid_to_entity(a) for a in assigns])
         by_sub: dict[str, list[str]] = {}
         for a in assigns:
             by_sub.setdefault(a.get("subcategory", "?"), []).append(a["def_name"])
-        add("sid_hierarchy", [format_sid_hierarchy(a, by_sub.get(a.get("subcategory", "?"), [])) for a in assigns])
+        add("rsid_hierarchy", [format_rsid_hierarchy(a, by_sub.get(a.get("subcategory", "?"), [])) for a in assigns])
+        # WRITE tasks (only entities that have a WSID)
+        with_wsid = [a for a in assigns if a.get("wsid_sequence")]
+        add("entity_to_wsid", [format_entity_to_wsid(a) for a in with_wsid])
+        add("wsid_to_action", [format_wsid_to_action(a) for a in with_wsid])
 
     # Gameplay episodes
     ep_dir = Path(cfg_get(cfg, "paths.episodes_dir", "data/episodes"))
-    replay, action_pred, reasoning = [], [], []
+    replay, action_pred, reasoning, wsid_seq = [], [], [], []
     for ep_path in ep_dir.glob("*/episode.json"):
         ep = load_episode(ep_path)
         for step in ep.steps:
             replay.append(format_episode_replay(step))
             action_pred.append(format_action_prediction(step))
             reasoning.append(format_reasoning_only(step))
+            if step.action_wsids:  # the workflow that actually occurred this step
+                wsid_seq.append(" then ".join(step.action_wsids))
     add("episode_replay", replay)
     add("action_prediction", action_pred)
     add("reasoning_only", reasoning)
+    add("wsid_sequence", wsid_seq)
 
     return _resample_to_mix(examples, mix, rng)
 

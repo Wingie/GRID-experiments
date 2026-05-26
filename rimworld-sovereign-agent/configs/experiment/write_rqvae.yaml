@@ -1,0 +1,15 @@
+# @package _global_
+# Step 10: after bootstrap gameplay exists, mine co-occurrence and train the WRITE RQ-VAE,
+# then re-assign dual (RSID + WSID) IDs. Run AFTER ~50-100 bootstrap episodes (gotcha #11):
+#   python -m rimworld_agent.semantic_ids.collect_cooccurrence experiment=write_rqvae
+#   python -m rimworld_agent.semantic_ids.assign_ids           experiment=write_rqvae
+
+semantic_ids:
+  enabled: true
+  write:
+    enabled: true
+    cooccurrence_window: 5
+    rqvae:
+      levels: 3
+      codebook_size: 64
+      train_steps: 2000

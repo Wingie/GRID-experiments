@@ -1,15 +1,19 @@
-# Sovereign Game Agents: Teaching Small Language Models to Play RimWorld via Tokenizer Extension, Semantic IDs, and Self-Play
+# Sovereign Game Agents: Teaching Small Language Models to Play RimWorld via Tokenizer Extension, Dual Semantic IDs, and Self-Play
 
 ## Abstract
 
 We present a framework for training a ~1.5B-parameter language model to play
 [RimWorld](https://rimworldgame.com) by learning the game's codebase **at the embedding
-layer** instead of reading documentation at inference time. The model's tokenizer is
-extended with game-specific vocabulary, the entity hierarchy is encoded as hierarchical
-**Semantic IDs** via an RQ-VAE, and visual understanding is trained through an **mmproj**
-projection on game screenshots. The agent observes the last 4 frames, reasons about colony
-priorities, and outputs up to 5 actions with justifications. Training uses a **self-play**
-loop with the game's own quest/reward signal. All experiments target a single RTX 3090.
+layer** instead of reading documentation at inference time. The tokenizer is extended with
+game vocabulary, and entity hierarchy is encoded as **dual Semantic IDs** via separate
+RQ-VAEs: **READ SIDs (RSIDs)** capture entity taxonomy for perception/reasoning, while
+**WRITE SIDs (WSIDs)** capture workflow co-occurrence for action planning — motivated by
+Spotify's finding (NeurIPS 2025) that search-tuned and recommendation-tuned semantic IDs
+degrade each other when sharing a codebook. Visual understanding is trained through an
+**mmproj** projection aligned to RSID embeddings. The agent observes the last 4 frames,
+reasons with RSIDs about colony state, and plans actions with WSIDs. Training uses a
+**self-play** loop with the game's own quest/reward signal. All experiments target a single
+RTX 3090.
 
 ## The key idea
 
@@ -17,14 +21,30 @@ This is **not primarily about playing RimWorld well**. RimWorld is the *testbed*
 general recipe that applies to any codebase or app with a reward signal:
 
 1. **Extend the tokenizer** with domain vocabulary — proven (AdaptiVocab / VEGAD).
-2. **Assign semantic IDs to code/game entities** via RQ-VAE — TIGER applied to a codebase.
-3. **Train vision on your specific UI** — mmproj for a domain app.
+2. **Dual semantic IDs for entities** via two RQ-VAEs — TIGER applied to a codebase, split
+   into READ (taxonomy) and WRITE (workflow) because *reading* and *writing* optimise for
+   different similarity metrics, just as search and recommendation do (Spotify, NeurIPS 2025).
+3. **Train vision on your specific UI** — mmproj for a domain app, aligned to RSIDs.
 4. **Plan actions with discrete diffusion** — parallel action generation + denoising.
 5. **Improve by self-play** — GRPO-style filtering where the game *is* the reward model.
 
-The same pipeline applies to testing **your** web app, navigating **your** IDE, or
-automating **your** internal tools. RimWorld just ships a built-in reward signal (quests,
-wealth, survival).
+The **dual SID** insight is the key novelty. The same pipeline applies to testing **your**
+web app, navigating **your** IDE, or automating **your** internal tools. RimWorld just ships
+a built-in reward signal (quests, wealth, survival).
+
+## READ vs WRITE semantic IDs
+
+| Entity | READ SID (what it IS) | WRITE SID (what it's USED WITH) |
+|--------|----------------------|---------------------------------|
+| SolarGenerator | `Buildings→Power→Solar` | `PowerSetup→Generation→Solar` |
+| Battery | `Buildings→Power→Storage` | `PowerSetup→Storage→Battery` |
+| ResearchBench | `Buildings→Production→Research` | `PowerSetup→Prerequisites→Bench` |
+
+RSIDs appear in `<REASONING>` (perception); WSIDs annotate `<ACTIONS>` (planning). The model
+learns the same entity has two addresses — "I see a bed" vs "I should build a bed". Token
+budget: `192` RSID + `192` WSID per-level tokens + structural + ~256 mined vocab ≈ 646 new
+tokens (<0.5% of a 151k vocab). **Training order matters** (gotcha #11): READ trains from
+Defs alone; WRITE needs bootstrap gameplay to mine co-occurrence first.
 
 ## Relationship to `vocab-extend-qlora`
 
@@ -49,7 +69,7 @@ pip install -e .                            # this package: `rimworld_agent`
 | Phase | Module | What it does |
 |------|--------|--------------|
 | 1. Knowledge | `rimworld_agent/knowledge/` | Parse XML Defs (`extract_defs`), decompiled C# (`extract_csharp`), scrape the wiki (`scrape_wiki`); mine inefficient tokens (`mine_tokens`); extend the tokenizer (`extend_tokenizer`). |
-| 2. Semantic IDs | `rimworld_agent/semantic_ids/` | Build the entity graph, embed entities, train an RQ-VAE (`rqvae`, reused), assign `<SID_L*_*>` tokens (`assign_ids`), visualise clusters. |
+| 2. Semantic IDs | `rimworld_agent/semantic_ids/` | Build the entity graph; train the READ RQ-VAE (`rqvae_read`, taxonomy) and — after gameplay — the WRITE RQ-VAE (`rqvae_write`) from mined co-occurrence (`collect_cooccurrence`); assign dual `<RSID_L*_*>` + `<WSID_L*_*>` tokens (`assign_ids`); compare READ vs WRITE clusters (`visualize`). |
 | 3. Vision | `rimworld_agent/vision/` | Capture screenshots, train an mmproj projection (SigLIP→MLP→LLM space), encode the 4-frame history. |
 | 4. Game | `rimworld_agent/game/` | RIMAPI REST client, the finite action space + token grammar, keymap, reward function, episode recorder, game loop. |
 | 5. Training | `rimworld_agent/training/` | Build the multi-source dataset, QLoRA knowledge pre-training, self-play loop, merge + GGUF export. |
@@ -58,14 +78,20 @@ pip install -e .                            # this package: `rimworld_agent`
 Every stage is a Hydra entry point:
 
 ```bash
-python -m rimworld_agent.knowledge.extract_defs                 # parse Defs -> results/entities.json
-python -m rimworld_agent.semantic_ids.assign_ids experiment=semantic_ids
-python -m rimworld_agent.knowledge.extend_tokenizer             # extend + init embeddings
-python -m rimworld_agent.training.train_qlora experiment=knowledge_pretrain
-python -m rimworld_agent.vision.train_mmproj experiment=mmproj_train
-python -m rimworld_agent.training.self_play experiment=self_play
-python -m rimworld_agent.eval.eval_compression
+python -m rimworld_agent.knowledge.extract_defs                      # parse Defs -> results/entities.json
+python -m rimworld_agent.semantic_ids.assign_ids experiment=semantic_ids   # READ SIDs (taxonomy)
+python -m rimworld_agent.training.train_qlora    experiment=knowledge_pretrain  # RSIDs only
+python -m rimworld_agent.training.self_play      experiment=bootstrap     # record bootstrap episodes
+python -m rimworld_agent.semantic_ids.collect_cooccurrence experiment=write_rqvae
+python -m rimworld_agent.semantic_ids.assign_ids experiment=write_rqvae    # adds WRITE SIDs (workflow)
+python -m rimworld_agent.training.train_qlora    experiment=dual_pretrain  # retrain with RSID + WSID
+python -m rimworld_agent.training.self_play      experiment=self_play
+python -m rimworld_agent.eval.eval_planning                          # RSID/WSID usage + leakage
+python -m rimworld_agent.eval.eval_ablation                          # dual vs single (spec §9f)
 ```
+
+> **Training order is a hard dependency** (gotcha #11): READ SIDs → RSID-only pre-training →
+> bootstrap gameplay → WRITE SIDs from co-occurrence → dual retrain → self-play.
 
 Configuration is Hydra (`configs/base.yaml` + `configs/experiment/*.yaml`). The top-level
 `mining`, `extend`, `semantic_ids`, `model`, `paths` namespaces mirror `vocab-extend-qlora`

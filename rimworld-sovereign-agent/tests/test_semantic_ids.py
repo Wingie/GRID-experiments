@@ -67,18 +67,45 @@ def test_text_blob_nonempty(xml_dir):
     assert all(e.text_blob().strip() for e in entities)
 
 
-def test_sid_vocab_format_and_parse():
-    pytest.importorskip("torch")  # veq's assign_ids module pulls numpy; vocab itself is light
-    from rimworld_agent.semantic_ids.assign_ids import _vocab_cls
+def test_dual_sid_vocab_format_and_parse():
+    from rimworld_agent.semantic_ids.sid_vocab import SIDVocab
 
-    Vocab = _vocab_cls()
-    v = Vocab(levels=3, codebook_size=64)
-    assert len(v.per_level_tokens()) == 192
-    assert len(v.special_tokens()) == 192 + 3 + 5
-    assert v.token_to_level_code("<SID_L1_02>") == (0, 2)
-    seq = v.format_sequence([2, 1, 5])
-    assert seq.startswith("<SID_START>") and seq.endswith("<SID_END>")
-    assert "<SID_L1_02>" in seq and "<SID_L3_05>" in seq
+    rv = SIDVocab(prefix="RSID", levels=3, codebook_size=64)
+    wv = SIDVocab(prefix="WSID", levels=3, codebook_size=64)
+    # Each family contributes 192 per-level tokens + 3 structural; they do NOT collide.
+    assert len(rv.per_level_tokens()) == 192 and len(wv.per_level_tokens()) == 192
+    assert set(rv.special_tokens()).isdisjoint(set(wv.special_tokens()))
+    assert rv.token_to_level_code("<RSID_L1_02>") == (0, 2)
+    assert wv.token_to_level_code("<WSID_L3_07>") == (2, 7)
+    assert rv.token_to_level_code("<WSID_L1_02>") is None  # wrong family
+    rseq = rv.format_sequence([2, 1, 5])
+    assert rseq.startswith("<RSID_START>") and "<RSID_L1_02>" in rseq and rseq.endswith("<RSID_END>")
+    wseq = wv.format_inline([5, 2, 3])
+    assert wseq == "<WSID_L1_05><WSID_L2_02><WSID_L3_03>"
+
+
+def test_cooccurrence_and_write_embeddings(tmp_path):
+    from rimworld_agent.game.action_space import Action
+    from rimworld_agent.game.episode_recorder import EpisodeRecorder, GameState
+    from rimworld_agent.semantic_ids.collect_cooccurrence import collect_cooccurrence
+    from rimworld_agent.semantic_ids.rqvae_write import build_write_embeddings
+
+    # Two episodes where SolarGenerator + Battery are built together (workflow co-occurrence).
+    for ep_i in range(2):
+        rec = EpisodeRecorder(episode_id=f"ep_{ep_i}", root=tmp_path)
+        rec.record(GameState(), "", [
+            Action("order_build", {"def_name": "SolarGenerator", "x": 1, "y": 1}),
+            Action("order_build", {"def_name": "Battery", "x": 2, "y": 1}),
+        ], {"total": 1.0})
+        rec.record(GameState(), "", [Action("order_research", {"project_def": "Electricity"})], {"total": 1.0})
+        rec.save()
+
+    cooc = collect_cooccurrence(tmp_path, window=5)
+    assert set(cooc.def_names) == {"SolarGenerator", "Battery", "Electricity"}
+    si, bi = cooc.index["SolarGenerator"], cooc.index["Battery"]
+    assert cooc.matrix[si, bi] > 0  # they co-occur within a step
+    emb = build_write_embeddings(cooc, dim=16)
+    assert emb.shape == (3, 16)
 
 
 def test_rqvae_shapes_and_codebook():

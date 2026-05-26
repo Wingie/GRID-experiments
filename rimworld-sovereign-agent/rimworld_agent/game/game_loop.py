@@ -29,7 +29,17 @@ log = get_logger("game_loop")
 class Observation:
     game_state: GameState
     screenshots: list[str] = field(default_factory=list)  # paths to the last 4 frames
-    visible_sids: list[str] = field(default_factory=list)
+    visible_rsids: list[str] = field(default_factory=list)  # READ SIDs of on-screen entities
+
+
+def _action_def_names(actions: list[Action]) -> list[str]:
+    names = []
+    for a in actions:
+        for key in ("def_name", "project_def", "plant_def"):
+            v = a.params.get(key)
+            if isinstance(v, str) and v:
+                names.append(v)
+    return names
 
 
 class Policy(Protocol):
@@ -55,18 +65,24 @@ def play_episode(
     max_steps: int = 150,
     weights: RewardWeights = DEFAULT_WEIGHTS,
     frame_interval: float = 5.0,
-    sids_for: Callable[[list[str]], list[str]] | None = None,
+    rsids_for: Callable[[list[str]], list[str]] | None = None,
+    wsids_for: Callable[[list[str]], list[str]] | None = None,
 ) -> EpisodeRecorder:
-    """Run one episode to completion (or ``max_steps``) and return the recorder."""
+    """Run one episode to completion (or ``max_steps``) and return the recorder.
+
+    ``rsids_for`` maps visible def_names -> READ SIDs (perception); ``wsids_for`` maps the
+    acted-on def_names -> WRITE SIDs (the planned workflow).
+    """
     prev_state = client.get_state()
     for step_index in range(max_steps):
         screenshots = _capture_frames(client, recorder, step_index)
         visible = client.visible_entities()
-        visible_sids = sids_for(visible) if sids_for else []
-        obs = Observation(game_state=prev_state, screenshots=screenshots, visible_sids=visible_sids)
+        visible_rsids = rsids_for(visible) if rsids_for else []
+        obs = Observation(game_state=prev_state, screenshots=screenshots, visible_rsids=visible_rsids)
 
         reasoning, actions = policy(obs)
         actions = actions[:MAX_ACTIONS_PER_TURN]
+        action_wsids = wsids_for(_action_def_names(actions)) if wsids_for else []
 
         invalid = 0
         for action in actions:
@@ -84,7 +100,8 @@ def play_episode(
             actions=actions,
             reward=reward,
             screenshots=screenshots,
-            visible_sids=visible_sids,
+            visible_rsids=visible_rsids,
+            action_wsids=action_wsids,
         )
         prev_state = curr_state
         if _is_terminal(curr_state):

@@ -23,6 +23,32 @@ from rimworld_agent.utils import cfg_get, ensure_dir, get_logger, write_json
 log = get_logger("self_play")
 
 
+def _sid_lookups(cfg):
+    """Build (rsids_for, wsids_for) callables from the precomputed SID assignments.
+
+    ``rsids_for(def_names)`` -> the RSID inline strings of those entities (perception);
+    ``wsids_for(def_names)`` -> the WSID inline strings (workflow), skipping entities that
+    have no WSID yet. Returns (None, None) if no assignments file exists.
+    """
+    import json
+    from pathlib import Path
+
+    path = Path(cfg_get(cfg, "paths.sid_assignments_file", "results/sid_assignments.json"))
+    if not path.exists():
+        return None, None
+    assigns = json.loads(path.read_text())["assignments"]
+    rmap = {dn: a["rsid_inline"] for dn, a in assigns.items() if a.get("rsid_inline")}
+    wmap = {dn: a["wsid_inline"] for dn, a in assigns.items() if a.get("wsid_inline")}
+
+    def rsids_for(def_names):
+        return [rmap[n] for n in def_names if n in rmap]
+
+    def wsids_for(def_names):
+        return [wmap[n] for n in def_names if n in wmap]
+
+    return rsids_for, wsids_for
+
+
 # --------------------------------------------------------------------------- #
 # Policies
 # --------------------------------------------------------------------------- #
@@ -57,8 +83,9 @@ class ModelPolicy:
 
         return (
             "You are a RimWorld colony manager. Analyse the situation and provide up to 5 "
-            "actions with reasoning.\n"
-            + render_game_state(obs.game_state, obs.visible_sids)
+            "actions with reasoning. Use RSIDs when describing what you observe, WSIDs when "
+            "planning actions.\n"
+            + render_game_state(obs.game_state, obs.visible_rsids)
             + "\n<REASONING>"
         )
 
@@ -123,6 +150,7 @@ def run_self_play(cfg) -> dict:
     n_iters = cfg_get(cfg, "self_play.iterations", 5)
     k = cfg_get(cfg, "self_play.episodes_per_iter", 20)
     ep_root = ensure_dir(cfg_get(cfg, "paths.episodes_dir", "data/episodes"))
+    rsids_for, wsids_for = _sid_lookups(cfg)
     metrics = []
 
     for it in range(n_iters):
@@ -132,15 +160,19 @@ def run_self_play(cfg) -> dict:
             rec = EpisodeRecorder(episode_id=f"it{it:02d}_ep{j:03d}", root=ep_root,
                                   scenario=cfg_get(cfg, "game.scenario", "crashlanded"),
                                   difficulty=cfg_get(cfg, "game.difficulty", "peaceful"))
-            play_episode(client, policy, rec, max_steps=cfg_get(cfg, "eval.episode_length", 150))
+            play_episode(client, policy, rec, max_steps=cfg_get(cfg, "eval.episode_length", 150),
+                         rsids_for=rsids_for, wsids_for=wsids_for)
             episodes.append(rec.episode)
 
         episodes.sort(key=lambda e: e.total_reward, reverse=True)
         good = episodes[: max(1, len(episodes) // 2)]
         median = episodes[len(episodes) // 2].total_reward if episodes else 0.0
-        log.info("iter %d: median reward=%.2f, training on top %d", it, median, len(good))
 
-        train_on_episodes(cfg, model, tokenizer, good)
+        if cfg_get(cfg, "self_play.train", True):
+            log.info("iter %d: median reward=%.2f, training on top %d", it, median, len(good))
+            train_on_episodes(cfg, model, tokenizer, good)
+        else:
+            log.info("iter %d: median reward=%.2f, recording only (no training)", it, median)
         metrics.append({
             "iteration": it,
             "mean_reward": sum(e.total_reward for e in episodes) / len(episodes),

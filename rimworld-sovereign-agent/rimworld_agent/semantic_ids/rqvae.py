@@ -1,14 +1,11 @@
-"""Hierarchical RQ-VAE for game-entity semantic IDs — reused verbatim from
-vocab-extend-qlora (``src.semantic_ids.rqvae``).
+"""Shared RQ-VAE architecture for semantic IDs — reused from vocab-extend-qlora
+(``src.semantic_ids.rqvae``).
 
-The RimWorld project deliberately does not reimplement the quantiser: the TIGER-style
-residual VQ-VAE with EMA codebooks + dead-code reinitialisation already lives in
-vocab-extend-qlora and is unit-tested there. We re-export the public symbols so the rest
-of this package can ``from rimworld_agent.semantic_ids.rqvae import ResidualVQVAE`` without
-caring where the implementation physically lives.
-
-Config mapping (project spec §3b): ``levels=3`` (Category -> SubCategory -> Item),
-``codebook_size=64`` (=> 3*64=192 per-level SID tokens), ``latent_dim=256``.
+This is the **shared base** for both codebooks in the dual-RQ-VAE design (project spec §3b,
+gotcha #12): the READ RQ-VAE (`rqvae_read`) and WRITE RQ-VAE (`rqvae_write`) use the *same*
+TIGER-style residual quantiser (EMA codebooks + dead-code reinit, ``L=3 × K=64``) but train
+on different embeddings — structural similarity for READ, workflow co-occurrence for WRITE.
+We re-export the quantiser so both training scripts share one implementation.
 """
 
 from __future__ import annotations
