@@ -18,9 +18,9 @@
    └──────┬───────┘   │  ├──────────────────────┤   │
           │           │  │ mmproj: SigLIP→MLP    │◀──┼── 4-frame visual tokens
    ┌──────▼───────┐   │  ├──────────────────────┤   │
-   │ semantic IDs │   │  │ T5/decoder + diffusion │   │
-   │  RQ-VAE L=3  │──▶│  │   action head          │   │
-   │  K=64        │   │  └──────────────────────┘   │
+   │ dual sem-IDs │   │  │ T5/decoder + diffusion │   │
+   │ READ  (RSID) │──▶│  │   action head          │   │   RSID→reasoning
+   │ WRITE (WSID) │   │  └──────────────────────┘   │   WSID→actions
    └──────────────┘   └───────────────┬─────────────┘
                                        │ reward (quests, wealth, mood, deaths)
                                        ▼
@@ -38,11 +38,21 @@
    C# / wiki views into one dense vector per entity (CodeT5+-110M encoder, reused from
    vocab-extend-qlora with an offline hashing fallback).
 
-2. **Embeddings → semantic IDs.** `assign_ids.run_pipeline` trains the RQ-VAE
-   (`L=3` levels × `K=64` codes ⇒ `262 144` possible IDs, `192` per-level SID tokens) and
-   maps every entity to an `<SID_L1_*><SID_L2_*><SID_L3_*>` sequence. IDs are per-entity and
-   independent (TIGER-style); the entity graph supplies a category label only for
-   *measuring* hierarchical consistency, not for enforcing prefixes.
+2. **Embeddings → dual semantic IDs.** `assign_ids.run_pipeline` trains **two** RQ-VAEs that
+   share the architecture (`L=3 × K=64`, `192` per-level tokens each) but quantise different
+   embeddings:
+   - **READ** (`rqvae_read`) quantises *structural* embeddings (the def/label/C#/wiki views,
+     optionally pulled toward their entity-graph category centroid) → `<RSID_L*_*>` for every
+     entity. "What IS this?" — SolarGenerator and WindTurbine share an RSID prefix.
+   - **WRITE** (`rqvae_write`) quantises *workflow* embeddings — PPMI + SVD of the
+     co-occurrence matrix mined from gameplay (`collect_cooccurrence`) → `<WSID_L*_*>` for
+     entities the agent has acted on. "What is this USED WITH?" — SolarGenerator and Battery
+     share a WSID prefix because they are built together.
+
+   Spotify (NeurIPS 2025) showed search-tuned and rec-tuned semantic IDs degrade each other in
+   a shared codebook; reading and writing code have the same tension, so we keep two codebooks.
+   The entity graph supplies category labels for READ sharpening + *measuring* hierarchical
+   consistency, not for enforcing prefixes. WRITE requires bootstrap gameplay first (gotcha #11).
 
 3. **Tokenizer extension.** `extend_tokenizer` (delegating to `vocab-extend-qlora.extend`)
    adds the top-N mined game tokens (`add_tokens`, mean-initialised) and the SID +
@@ -70,7 +80,9 @@
 rimworld_agent/
   utils.py                 to_veq_cfg bridge, veq locator, JSON IO, logging
   knowledge/               extract_defs, extract_csharp, scrape_wiki, mine_tokens, extend_tokenizer
-  semantic_ids/            build_entity_graph, embed_entities, rqvae(reuse), assign_ids, visualize
+  semantic_ids/            build_entity_graph, embed_entities, rqvae(shared base, reused),
+                           rqvae_read, rqvae_write, collect_cooccurrence, sid_vocab,
+                           assign_ids(dual), visualize(READ vs WRITE)
   vision/                  screenshot, ui_elements, state_encoder, dataset, train_mmproj
   game/                    action_space, keymap, reward, episode_recorder, rimapi_client, game_loop
   training/                prepare_data, train_qlora, self_play, merge_export

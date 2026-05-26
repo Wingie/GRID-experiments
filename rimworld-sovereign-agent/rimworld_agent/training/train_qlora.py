@@ -18,30 +18,18 @@ from rimworld_agent.utils import (
     ensure_dir,
     ensure_veq_importable,
     get_logger,
-    to_veq_cfg,
     write_json,
 )
 
 log = get_logger("train_qlora")
 
 
-def _all_special_tokens(cfg) -> list[str]:
-    """Action + vision structural tokens added on top of the SID tokens veq registers."""
-    from rimworld_agent.game.action_space import action_special_tokens
-    from rimworld_agent.vision.state_encoder import vision_special_tokens
-
-    extra = action_special_tokens() + vision_special_tokens()
-    return extra
-
-
 def train(cfg) -> dict:
     ensure_veq_importable(cfg_get(cfg, "paths.veq_path", None))
-    from src.extend_tokenizer import extend  # type: ignore
 
-    from rimworld_agent.knowledge.extend_tokenizer import build_game_token_lists
+    from rimworld_agent.knowledge.extend_tokenizer import build_game_token_lists, extend_dual
     from rimworld_agent.training.prepare_data import build_examples, save_dataset
 
-    veq = to_veq_cfg(cfg)
     model_id = cfg_get(cfg, "model.id", "Qwen/Qwen2.5-Coder-1.5B-Instruct")
 
     # 1. Unsloth 4-bit load (patches BEFORE resize_token_embeddings).
@@ -54,14 +42,9 @@ def train(cfg) -> dict:
         dtype=None,
     )
 
-    # 2. Extend tokenizer with game vocab + SID tokens (reuses veq.extend).
-    freq_tokens, sid_vocab, codebook_vectors = build_game_token_lists(cfg)
-    extend_report = extend(tokenizer, model, freq_tokens, sid_vocab, codebook_vectors, veq)
-    # Register action/vision structural tokens too (mean-initialised by HF resize default;
-    # extend() already handled freq+SID rows).
-    added = tokenizer.add_special_tokens({"additional_special_tokens": _all_special_tokens(cfg)})
-    if added:
-        model.resize_token_embeddings(len(tokenizer))
+    # 2. Extend tokenizer with game vocab + dual SID (RSID+WSID) + action/vision tokens.
+    freq_tokens, dual = build_game_token_lists(cfg)
+    extend_report = extend_dual(tokenizer, model, freq_tokens, dual, cfg)
 
     # 3. LoRA with embed/lm_head trainable so the new rows learn.
     model = FastLanguageModel.get_peft_model(

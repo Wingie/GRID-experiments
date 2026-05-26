@@ -3,8 +3,8 @@
 Architecture: SigLIP-SO400M (frozen) -> 2-layer MLP -> LLM embedding space. Only the MLP
 is trained. Two losses:
   * alignment   — visual features of a screenshot whose state contains entity ``e`` are
-                  pulled toward ``e``'s SID-token embedding (so "seeing a solar panel" lands
-                  near ``<SID:3-3-2>``);
+                  pulled toward ``e``'s READ SID embedding (vision is perception, so we align
+                  to RSIDs: "seeing a solar panel" lands near ``<RSID_L3_02>``);
   * contrastive — screenshots of the same colony state are pulled together, different
                   states pushed apart.
 
@@ -109,7 +109,7 @@ def train_mmproj(cfg) -> dict:
         hidden=cfg_get(cfg, "vision.mmproj_hidden", 2048),
     ).to(device)
 
-    sid_embeddings = torch.load(cfg_get(cfg, "vision.sid_embedding_path")).to(device)
+    sid_embeddings = torch.load(cfg_get(cfg, "vision.rsid_embedding_path")).to(device)
     ds = ScreenshotStateDataset(cfg, preprocess, sid_embeddings)
     dl = DataLoader(ds, batch_size=cfg_get(cfg, "vision.batch_size", 16), shuffle=True)
     opt = torch.optim.AdamW(mmproj.parameters(), lr=cfg_get(cfg, "vision.lr", 1e-4))

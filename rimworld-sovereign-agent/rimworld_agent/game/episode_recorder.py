@@ -59,7 +59,8 @@ class Step:
     game_tick: int = 0
     screenshots: list[str] = field(default_factory=list)
     game_state: GameState = field(default_factory=GameState)
-    visible_sids: list[str] = field(default_factory=list)
+    visible_rsids: list[str] = field(default_factory=list)  # READ SIDs: what the model sees
+    action_wsids: list[str] = field(default_factory=list)  # WRITE SIDs: the workflow it plans
     reasoning: str = ""
     actions: list[Action] = field(default_factory=list)
     reward: dict[str, float] = field(default_factory=dict)
@@ -70,7 +71,8 @@ class Step:
             "game_tick": self.game_tick,
             "screenshots": list(self.screenshots),
             "game_state": self.game_state.to_dict(),
-            "visible_sids": list(self.visible_sids),
+            "visible_rsids": list(self.visible_rsids),
+            "action_wsids": list(self.action_wsids),
             "reasoning": self.reasoning,
             "actions": [a.to_dict() for a in self.actions],
             "reward": dict(self.reward),
@@ -83,7 +85,8 @@ class Step:
             game_tick=d.get("game_tick", 0),
             screenshots=list(d.get("screenshots", [])),
             game_state=GameState.from_dict(d.get("game_state", {})),
-            visible_sids=list(d.get("visible_sids", [])),
+            visible_rsids=list(d.get("visible_rsids", [])),
+            action_wsids=list(d.get("action_wsids", [])),
             reasoning=d.get("reasoning", ""),
             actions=[Action.from_dict(a) for a in d.get("actions", [])],
             reward=dict(d.get("reward", {})),
@@ -151,14 +154,16 @@ class EpisodeRecorder:
         reward: dict[str, float],
         screenshots: list[str] | None = None,
         game_tick: int = 0,
-        visible_sids: list[str] | None = None,
+        visible_rsids: list[str] | None = None,
+        action_wsids: list[str] | None = None,
     ) -> Step:
         step = Step(
             step=len(self.episode.steps),
             game_tick=game_tick,
             screenshots=screenshots or [],
             game_state=game_state,
-            visible_sids=visible_sids or [],
+            visible_rsids=visible_rsids or [],
+            action_wsids=action_wsids or [],
             reasoning=reasoning,
             actions=actions,
             reward=reward,

@@ -1,21 +1,25 @@
 # @package _global_
-# Phase 7a: knowledge pre-training. Teach RimWorld vocabulary + Defs + mechanics with the
-# extended tokenizer and SID tokens, NO screenshots yet. Run:
+# Phase 7a: knowledge pre-training, RSIDs ONLY (WSIDs need gameplay first, gotcha #11).
+# Teaches RimWorld vocabulary + Defs + mechanics + READ taxonomy. No screenshots, no WSIDs.
 #   python -m rimworld_agent.training.train_qlora experiment=knowledge_pretrain
 
 extend_vocab: true
 semantic_ids:
   enabled: true
+  write:
+    enabled: false        # WRITE codebook not available before bootstrap episodes
 
 training:
-  # No gameplay data in this stage; weight the code/wiki/SID objectives.
   training_mix:
     xml_defs: 0.30
-    csharp_source: 0.20
-    wiki_text: 0.20
-    entity_to_sid: 0.10
-    sid_to_entity: 0.10
-    sid_hierarchy: 0.10
+    csharp_source: 0.18
+    wiki_text: 0.18
+    entity_to_rsid: 0.12
+    rsid_to_entity: 0.12
+    rsid_hierarchy: 0.10
+    entity_to_wsid: 0.0
+    wsid_sequence: 0.0
+    wsid_to_action: 0.0
     episode_replay: 0.0
     action_prediction: 0.0
     reasoning_only: 0.0

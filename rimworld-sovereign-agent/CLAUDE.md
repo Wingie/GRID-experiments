@@ -5,10 +5,15 @@ Guidance for Claude Code when working in this repository.
 ## What this is
 
 `rimworld-sovereign-agent` trains a ~1.5B "sovereign" SLM to play RimWorld by learning the
-game at the **embedding layer**: extended tokenizer + hierarchical **semantic IDs**
-(RQ-VAE) + **mmproj** vision + **discrete-diffusion** action planning + **self-play**.
+game at the **embedding layer**: extended tokenizer + **dual** hierarchical **semantic IDs**
+(two RQ-VAEs) + **mmproj** vision + **discrete-diffusion** action planning + **self-play**.
 RimWorld is the testbed for a general recipe (the same pipeline applies to any
 codebase/app with a reward signal). Targets a single RTX 3090.
+
+**Dual semantic IDs (the key idea):** READ SIDs (`<RSID_L*_*>`, taxonomy) describe what an
+entity IS — used in `<REASONING>` (perception); WRITE SIDs (`<WSID_L*_*>`, workflow) describe
+what it is USED WITH — used in `<ACTIONS>` (planning). Motivated by Spotify (NeurIPS 2025):
+search-tuned and rec-tuned semantic IDs degrade each other in one codebook, so we keep two.
 
 It currently lives as a **subdirectory of GRID-experiments**, a sibling of
 `vocab-extend-qlora`. It is designed to be split out later via
@@ -56,10 +61,11 @@ This repo is built so the **offline subset** is correct and tested without a GPU
 or network. Do not "fix" the offline fallbacks by making them hard failures.
 
 - **CPU / offline-verifiable:** `knowledge/extract_defs`, `semantic_ids/build_entity_graph`,
-  `semantic_ids/assign_ids.run_pipeline` (uses veq's HashingEncoder fallback when CodeT5+
-  can't be downloaded), `game/action_space`, `game/keymap`, `game/reward`,
-  `game/episode_recorder`, `training/prepare_data` (formatting), `eval/eval_compression`,
-  `eval/eval_planning`, and **all of `tests/`**.
+  `semantic_ids/sid_vocab`, `semantic_ids/collect_cooccurrence`, `semantic_ids/rqvae_write`
+  (PPMI+SVD), `semantic_ids/assign_ids.run_pipeline` (READ + WRITE; uses veq's HashingEncoder
+  fallback when CodeT5+ can't be downloaded), `game/action_space`, `game/keymap`,
+  `game/reward`, `game/episode_recorder`, `training/prepare_data` (formatting),
+  `eval/eval_compression`, `eval/eval_planning`, `eval/eval_ablation`, and **all of `tests/`**.
 - **GPU-only (written, unverified):** `knowledge/extend_tokenizer`, `training/train_qlora`,
   `training/merge_export`, `vision/train_mmproj`.
 - **Game-only (live RIMAPI):** `game/rimapi_client`, `game/game_loop`, `vision/screenshot`,
@@ -76,11 +82,25 @@ sanity-checks, **not** research numbers.
 
 ## Conventions & gotchas
 
-- **Semantic IDs are per-entity & independent** (TIGER-style). `L=3 × K=64 ⇒ 192` per-level
-  SID tokens. The entity graph (`build_entity_graph`) gives a category label for *measuring*
-  hierarchical consistency, not for enforcing SID prefixes.
-- **SID tokens** are `add_special_tokens` (never split); init from the RQ-VAE codebook
-  geometry (`extend.init_method=codebook`). Mined freq tokens use mean-of-subtoken init.
+- **Dual semantic IDs.** READ (`<RSID_*>`) and WRITE (`<WSID_*>`) are parallel token families
+  from two RQ-VAEs that **share the architecture** (`rqvae.py` re-exports veq's
+  `ResidualVQVAE`) but train on different embeddings: READ on structural views
+  (`rqvae_read.build_read_embeddings`, optionally category-sharpened), WRITE on co-occurrence
+  PPMI+SVD (`rqvae_write.build_write_embeddings`). `L=3 × K=64 ⇒ 192` per-level tokens *per
+  family*. `sid_vocab.SIDVocab(prefix=...)` owns the token grammar (NOT veq's `SemanticIDVocab`,
+  which is `<SID_>`-only).
+- **Training order is a hard dependency (gotcha #11):** READ (Defs only) → RSID-only QLoRA →
+  bootstrap gameplay (`experiment=bootstrap`, `self_play.train=false`) → mine co-occurrence →
+  WRITE RQ-VAE → dual retrain (`experiment=dual_pretrain`) → self-play. `assign_ids.run_pipeline`
+  assigns RSIDs to all entities and WSIDs only to entities acted-on in recorded episodes
+  (others get `wsid_*: None`).
+- **Watch for SID leakage (gotcha #13):** `eval_planning` reports `rsid_usage_rate` (reasoning),
+  `wsid_usage_rate` (actions), and `sid_leakage_rate` (WSID in reasoning / RSID in actions).
+- **SID tokens** are `add_special_tokens` (never split); RSID/WSID rows init from their
+  respective RQ-VAE codebook geometry (`extend.init_method=codebook`, `extend_tokenizer.extend_dual`).
+  Mined freq tokens use mean-of-subtoken init; action/vision structural tokens use the mean row.
+- **Entity graph** (`build_entity_graph`) gives a category label for *measuring* READ
+  hierarchical consistency (and READ contrastive sharpening), not for enforcing SID prefixes.
 - **Unsloth order** (gotcha #9): 4-bit load → `resize_token_embeddings` → `get_peft_model`,
   with `modules_to_save=[embed_tokens, lm_head]`. `training/train_qlora.train` follows it.
 - **`num_hierarchies` off-by-one** in the GRID parent does NOT apply here — we do not run the

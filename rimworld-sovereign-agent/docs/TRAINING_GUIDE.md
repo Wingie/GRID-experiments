@@ -23,34 +23,38 @@ python -m rimworld_agent.knowledge.scrape_wiki         # -> data/rimworld_wiki/*
 python -m rimworld_agent.knowledge.mine_tokens         # -> results/candidates.json
 ```
 
-## 2. Semantic IDs **[CPU]**
+## 2. READ semantic IDs **[CPU]**
 
 ```bash
 python -m rimworld_agent.semantic_ids.assign_ids experiment=semantic_ids
-#   -> data/models/rqvae.pt, results/sid_assignments.json
-python -m rimworld_agent.semantic_ids.visualize experiment=semantic_ids   # -> results/sid_clusters.png  (viz extra)
+#   -> data/models/rqvae_read.pt, results/sid_assignments.json (RSIDs; WSIDs still null)
+python -m rimworld_agent.semantic_ids.visualize experiment=semantic_ids   # READ vs WRITE clusters (viz extra)
 ```
 
-`L=3 × K=64` ⇒ 192 per-level SID tokens. Inspect `codebook_usage` in the JSON — if a level
-collapses, raise `semantic_ids.rqvae.train_steps` or lower `codebook_size`.
+`L=3 × K=64` ⇒ 192 per-level RSID tokens. WRITE SIDs are intentionally absent here — they need
+gameplay (step 5b). Inspect `read_codebook_usage` in the JSON; if a level collapses, raise
+`semantic_ids.read.rqvae.train_steps` or lower `codebook_size`.
 
 ## 3. Extend the tokenizer **[GPU]**
 
 ```bash
 python -m rimworld_agent.knowledge.extend_tokenizer
-#   adds mined tokens (mean init) + SID/action/vision tokens (codebook-projected init);
-#   resizes embeddings; -> data/models/extended/
+#   adds mined tokens (mean init) + RSID/WSID tokens (codebook-projected) + action/vision
+#   tokens (mean); resizes embeddings; -> data/models/extended/
 ```
 
-## 4. Knowledge pre-training **[GPU]**
+> Before bootstrap gameplay the WRITE codebook is empty, so the first extension registers
+> RSIDs only. After step 5b you re-extend (step 5c) with both families.
+
+## 4. Knowledge pre-training (RSIDs only) **[GPU]**
 
 ```bash
 python -m rimworld_agent.training.prepare_data experiment=knowledge_pretrain   # -> data/dataset/
 python -m rimworld_agent.training.train_qlora  experiment=knowledge_pretrain   # ~14 GB VRAM, 2–4 h
 ```
 
-QLoRA r=32, `modules_to_save=[embed_tokens, lm_head]` (so the new rows learn). FIM teaches
-Defs/C#/wiki; SID tasks teach entity↔ID mappings. No screenshots yet.
+QLoRA r=32, `modules_to_save=[embed_tokens, lm_head]`. FIM teaches Defs/C#/wiki; READ-SID
+tasks teach entity↔RSID mappings. No screenshots, no WSIDs yet.
 
 ## 5. Collect screenshots + train mmproj **[GAME]→[GPU]**
 
@@ -61,6 +65,26 @@ python -m rimworld_agent.vision.train_mmproj experiment=mmproj_train   # ~8 GB V
 ```
 
 500–1000 annotated screenshots is enough to start. Capture at 1× for clean frames.
+
+## 5b. Bootstrap gameplay → WRITE semantic IDs **[GAME]→[CPU]** (gotcha #11)
+
+The WRITE codebook needs co-occurrence data, which only exists once the agent has played.
+
+```bash
+# Record ~60 bootstrap episodes (random or the RSID-only model), NO training:
+python -m rimworld_agent.training.self_play experiment=bootstrap
+# Mine co-occurrence and train the WRITE RQ-VAE; re-assign dual RSID + WSID:
+python -m rimworld_agent.semantic_ids.collect_cooccurrence experiment=write_rqvae
+python -m rimworld_agent.semantic_ids.assign_ids           experiment=write_rqvae
+#   -> data/models/rqvae_write.pt; sid_assignments.json now has wsid_* for acted-on entities
+```
+
+## 5c. Re-extend + dual retrain **[GPU]**
+
+```bash
+python -m rimworld_agent.knowledge.extend_tokenizer                          # now adds WSID rows too
+python -m rimworld_agent.training.train_qlora experiment=dual_pretrain        # RSID + WSID mix
+```
 
 ## 6. Self-play **[GAME]+[GPU]**
 
@@ -84,9 +108,15 @@ scripts/export_ollama.sh                       # GGUF + Ollama Modelfile
 ```bash
 python -m rimworld_agent.eval.eval_compression          # [CPU] token reduction (target 25%+)
 python -m rimworld_agent.eval.eval_gameplay             # aggregate recorded episodes
-python -m rimworld_agent.eval.eval_planning             # [CPU] action validity + SID usage
+python -m rimworld_agent.eval.eval_planning             # [CPU] action validity + RSID/WSID usage + leakage
 python -m rimworld_agent.eval.eval_vision               # [GPU+GAME] screenshot understanding
+python -m rimworld_agent.eval.eval_ablation             # [CPU] dual vs single RQ-VAE table (spec §9f)
 ```
+
+**Key experiment (spec §9f):** run the pipeline under `sid_mode` ∈ {none, single, dual,
+multitask}, writing each config's metrics to `results/ablation/<mode>/`, then `eval_ablation`
+builds the comparison. If `single` matches `dual`, you save ~195 tokens; if `dual` wins on
+quest completion + low `sid_leakage_rate`, the READ/WRITE split is doing real work.
 
 ## Troubleshooting
 

@@ -36,7 +36,14 @@ def test_recorder_and_reload(tmp_path):
         Action("order_build", {"def_name": "Bed", "x": 15, "y": 22}, "quest bed"),
         Action("speed_3x", reason="advance"),
     ]
-    rec.record(_state(), "Doc idle, build beds.", actions, {"total": 0.55, "quest_progress": 0.3})
+    rec.record(
+        _state(),
+        "Doc idle, build beds.",
+        actions,
+        {"total": 0.55, "quest_progress": 0.3},
+        visible_rsids=["<RSID_L3_01>", "<RSID_L2_05>"],
+        action_wsids=["<WSID_L1_02>"],
+    )
     path = rec.save()
     assert path.exists()
 
@@ -49,6 +56,9 @@ def test_recorder_and_reload(tmp_path):
     assert step.actions[0].action == "order_build"
     assert step.actions[0].params["x"] == 15
     assert step.reasoning.startswith("Doc idle")
+    # dual SID fields round-trip: RSIDs for perception, WSIDs for planning
+    assert step.visible_rsids == ["<RSID_L3_01>", "<RSID_L2_05>"]
+    assert step.action_wsids == ["<WSID_L1_02>"]
 
 
 def test_frame_paths():

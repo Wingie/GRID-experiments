@@ -17,7 +17,9 @@ csharp_entities_file: results/csharp_entities.json
 entity_graph_file: results/entity_graph.json
 candidates_file: results/candidates.json
 sid_assignments_file: results/sid_assignments.json
-rqvae_ckpt: data/models/rqvae.pt
+cooccurrence_file: results/cooccurrence.json
+read_rqvae_ckpt: data/models/rqvae_read.pt    # READ codebook (taxonomy)
+write_rqvae_ckpt: data/models/rqvae_write.pt   # WRITE codebook (workflow)
 mmproj_ckpt: data/models/mmproj.pt
 
 # Gameplay + vision data
