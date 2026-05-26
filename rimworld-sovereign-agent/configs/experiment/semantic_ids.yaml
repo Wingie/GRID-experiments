@@ -1,0 +1,12 @@
+# @package _global_
+# Phase 2 only: learn the entity hierarchy and assign semantic IDs. Run:
+#   python -m rimworld_agent.semantic_ids.assign_ids experiment=semantic_ids
+#   python -m rimworld_agent.semantic_ids.visualize  experiment=semantic_ids
+
+semantic_ids:
+  enabled: true
+  use_csharp_view: true
+  rqvae:
+    levels: 3
+    codebook_size: 64
+    train_steps: 4000

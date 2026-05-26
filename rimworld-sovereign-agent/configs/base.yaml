@@ -1,0 +1,190 @@
+# Root Hydra config for rimworld-sovereign-agent.
+#
+# This file is self-contained: every stage reads it directly. Experiment overlays in
+# configs/experiment/*.yaml are `# @package _global_` files that turn on/parameterise a
+# specific run. Top-level namespaces `mining`, `extend`, `semantic_ids`, `model`, `paths`,
+# `seed`, `export` deliberately mirror vocab-extend-qlora's key names so that
+# `rimworld_agent.utils.to_veq_cfg(cfg)` can be passed straight into the reused veq
+# functions (token mining, RQ-VAE, tokenizer extension, GGUF export).
+
+defaults:
+  - _self_
+  - hydra: default
+  - paths: default
+
+seed: 42
+
+# --------------------------------------------------------------------------- #
+# Base model (project spec §7a)
+# --------------------------------------------------------------------------- #
+model:
+  id: Qwen/Qwen2.5-Coder-1.5B-Instruct
+  short_name: qwen25_coder_1.5b
+  max_seq_len: 4096
+
+# --------------------------------------------------------------------------- #
+# Phase 1: knowledge extraction
+# --------------------------------------------------------------------------- #
+knowledge:
+  def_types:
+    - ThingDef
+    - ResearchProjectDef
+    - RecipeDef
+    - WorkTypeDef
+    - JobDef
+    - BiomeDef
+    - ThoughtDef
+    - HediffDef
+    - IncidentDef
+    - QuestScriptDef
+    - TaleDef
+    - TraitDef
+    - SkillDef
+  csharp_namespaces: [RimWorld, Verse]
+  mine_csharp: true
+  allow_offline_tokenizer: true
+  wiki_request_delay: 1.0
+  wiki_pages:
+    [Research, Construction, Growing, Combat, Mood, Temperature, Power, Defense,
+     Caravan, Mechanoid_cluster, Wealth, Quests, Bedroom, Beauty, Medicine, Food,
+     Electricity, Raid]
+
+# --------------------------------------------------------------------------- #
+# Token mining (vocab-extend-qlora namespace)
+# --------------------------------------------------------------------------- #
+extend_vocab: true
+mining:
+  identifier_min_frequency: 5
+  ngram_sizes: [2, 3]
+  ngram_min_frequency: 25
+  top_n: 256
+
+# --------------------------------------------------------------------------- #
+# Tokenizer extension (vocab-extend-qlora namespace)
+# --------------------------------------------------------------------------- #
+extend:
+  # random | mean | exp_weighted | codebook  (codebook => SID tokens use RQ-VAE geometry)
+  init_method: codebook
+  exp_weight_decay: 0.5
+  modules_to_save: [embed_tokens, lm_head]
+
+# --------------------------------------------------------------------------- #
+# Phase 2: semantic IDs (RQ-VAE; vocab-extend-qlora namespace + game extras)
+# --------------------------------------------------------------------------- #
+semantic_ids:
+  enabled: true
+  use_csharp_view: true
+  encoder_model: Salesforce/codet5p-110m-embedding
+  embedding_dim: 256
+  encoder_max_length: 512
+  encoder_batch_size: 32
+  allow_offline_encoder_fallback: true
+  # Weighted views combined into each entity embedding (game-specific).
+  view_weights: { def: 0.5, label: 0.2, csharp: 0.2, wiki: 0.1 }
+  structural_tokens: ["<SID_START>", "<SID_END>", "<SID_SEP>"]
+  task_tokens: ["<PREDICT_SID>", "<SID_TO_SIG>", "<FIM_PREFIX>", "<FIM_MIDDLE>", "<FIM_SUFFIX>"]
+  viz_color_by: level1     # level1 | category
+  viz_method: umap         # umap | tsne | pca
+  rqvae:
+    levels: 3              # Category -> SubCategory -> Item  (=> 3*64=192 SID tokens)
+    codebook_size: 64
+    latent_dim: 256
+    hidden_dim: 512
+    commitment_weight: 0.25
+    reconstruction_weight: 1.0
+    ema_decay: 0.99
+    dead_code_threshold: 256
+    normalize_residuals: true
+    train_layer_wise: false
+    train_steps: 2000
+    batch_size: 256
+    lr: 1.0e-3
+
+# --------------------------------------------------------------------------- #
+# Phase 3: vision (mmproj)
+# --------------------------------------------------------------------------- #
+vision:
+  siglip_model: vit_so400m_patch14_siglip_384
+  d_model: 1536               # must match the SLM hidden size
+  tokens_per_frame: 256
+  mmproj_hidden: 2048
+  batch_size: 16
+  lr: 1.0e-4
+  epochs: 5
+  align_weight: 1.0
+  contrast_weight: 0.5
+  contrastive: true
+  sid_embedding_path: data/models/sid_embeddings.pt
+  sid_index_path: results/sid_index.json
+
+# --------------------------------------------------------------------------- #
+# Phase 4: game interaction
+# --------------------------------------------------------------------------- #
+game:
+  rimapi_url: http://127.0.0.1:7860
+  scenario: crashlanded
+  difficulty: peaceful          # start simple (gotcha #6)
+
+# --------------------------------------------------------------------------- #
+# Phase 5: training
+# --------------------------------------------------------------------------- #
+training:
+  max_seq_len: 4096
+  fim_rate: 0.5
+  # Multi-source training mix (project spec §6a; must sum to ~1.0).
+  training_mix:
+    xml_defs: 0.15
+    csharp_source: 0.10
+    wiki_text: 0.10
+    entity_to_sid: 0.05
+    sid_to_entity: 0.05
+    sid_hierarchy: 0.05
+    episode_replay: 0.30
+    action_prediction: 0.10
+    reasoning_only: 0.10
+  qlora:
+    lora_r: 32
+    lora_alpha: 64
+    lora_dropout: 0.0
+    target_modules: all-linear
+    modules_to_save: [embed_tokens, lm_head]
+    load_in_4bit: true
+    bnb_4bit_quant_type: nf4
+    precision: bf16
+    batch_size: 4
+    grad_accum: 4
+    lr: 2.0e-4
+    epochs: 3
+    warmup_ratio: 0.05
+    lr_scheduler: cosine
+    optim: paged_adamw_8bit
+    gradient_checkpointing: true
+
+self_play:
+  iterations: 5
+  episodes_per_iter: 20
+  bootstrap_random: true
+  use_vision: true
+  lr: 1.0e-5
+  batch_size: 4
+  temperature: 0.8
+  max_new_tokens: 512
+
+# --------------------------------------------------------------------------- #
+# Phase 6: evaluation
+# --------------------------------------------------------------------------- #
+eval:
+  episode_length: 150
+  reward_weights:
+    quest_progress: 2.0
+    wealth: 0.001
+    research: 1.5
+    construction: 0.5
+    mood: 1.0
+    death: -10.0
+    idle: -0.1
+    noop: -0.5
+    invalid_action: -0.3
+
+export:
+  quant: q4_k_m

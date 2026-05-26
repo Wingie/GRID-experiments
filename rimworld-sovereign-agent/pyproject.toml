@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rimworld-sovereign-agent"
+version = "0.1.0"
+description = "A sovereign small-LM game agent for RimWorld: tokenizer extension + semantic IDs + mmproj vision + discrete-diffusion action planning + self-play, on a single RTX 3090."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "rimworld-sovereign-agent contributors" }]
+keywords = [
+    "llm",
+    "game-ai",
+    "rimworld",
+    "tokenizer",
+    "semantic-ids",
+    "rq-vae",
+    "mmproj",
+    "self-play",
+    "qlora",
+]
+
+# `vocab-extend-qlora` is imported as a dependency (its package is `src`). It is consumed
+# editable from the sibling checkout: `pip install -e ../vocab-extend-qlora`. We do not
+# list it here as a PyPI dependency because it is not published; see README for install.
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "bitsandbytes>=0.43.0",
+    "datasets",
+    "accelerate",
+    "hydra-core>=1.3",
+    "omegaconf>=2.3",
+    "lxml",
+    "requests",
+    "websockets",
+    "numpy",
+    "pandas",
+    "tqdm",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+# Heavy / hardware-specific extras kept optional so the offline pipeline + tests install
+# cleanly without CUDA, Unsloth, a C++ toolchain, or a display server.
+train = ["unsloth"]
+vision = ["timm", "Pillow", "mss"]
+csharp = ["tree-sitter>=0.21", "tree-sitter-c-sharp"]
+viz = ["matplotlib", "seaborn", "umap-learn", "scikit-learn", "jupyter"]
+export = ["llama-cpp-python"]
+track = ["wandb"]
+dev = ["ruff", "pyright", "pytest", "pre-commit"]
+
+[project.urls]
+Homepage = "https://github.com/wingie/rimworld-sovereign-agent"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rimworld_agent*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pyright]
+include = ["rimworld_agent", "tests"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = false  # heavy optional deps (unsloth, timm, tree_sitter_*) may be absent
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

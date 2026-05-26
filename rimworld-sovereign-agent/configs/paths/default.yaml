@@ -1,0 +1,28 @@
+# @package paths
+# All filesystem paths the pipeline reads/writes. Relative to the repo root by default.
+
+results_dir: results
+data_dir: data
+model_out_dir: data/models
+dataset_dir: data/dataset
+
+# Phase 1 inputs (populated by scripts/setup_rimworld.sh + decompile_source.sh + scrape_wiki)
+xml_defs_dir: data/rimworld_xml_defs
+csharp_source_dir: data/rimworld_source
+wiki_dir: data/rimworld_wiki
+
+# Intermediate artifacts
+entities_file: results/entities.json
+csharp_entities_file: results/csharp_entities.json
+entity_graph_file: results/entity_graph.json
+candidates_file: results/candidates.json
+sid_assignments_file: results/sid_assignments.json
+rqvae_ckpt: data/models/rqvae.pt
+mmproj_ckpt: data/models/mmproj.pt
+
+# Gameplay + vision data
+episodes_dir: data/episodes
+screenshots_dir: data/screenshots
+
+# Path to the sibling vocab-extend-qlora checkout (null => auto-locate / installed).
+veq_path: null

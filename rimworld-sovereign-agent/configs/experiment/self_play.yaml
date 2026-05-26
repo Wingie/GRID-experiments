@@ -1,0 +1,18 @@
+# @package _global_
+# Phase 7c: self-play refinement loop (GRPO-style filtering + discrete-diffusion action
+# denoising). Requires a running game + RIMAPI. Run:
+#   python -m rimworld_agent.training.self_play experiment=self_play
+
+game:
+  scenario: crashlanded
+  difficulty: peaceful        # no threats => pure build/research optimisation (gotcha #6)
+
+self_play:
+  iterations: 8
+  episodes_per_iter: 20
+  bootstrap_random: true
+  use_vision: true
+  temperature: 0.8
+
+eval:
+  episode_length: 150
