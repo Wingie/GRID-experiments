@@ -58,7 +58,29 @@ Knowledge extraction: `extract_sde_types` reads `data/eve_sde/fsd/types.yaml` (o
 `bsd/typeIDs.yaml`) into `EVEType` records — directly compatible with the same dual
 RQ-VAE pipeline (RSIDs cluster by hull/module/ore taxonomy; WSIDs cluster by industry chain).
 
-### 3. `kiosk` — `KioskBackend` (response-only Q&A)
+### 3a. `commentary` — `CommentaryWrapper` (user Q&A *while the game plays*)
+
+Bolts a parallel user-question channel onto any other backend. The wrapped action space
+gains one new action, `say`; every `observe()` checks a `QuestionSource` (in-memory queue,
+tailed file, websocket — pluggable) and surfaces a pending user question in
+`Observation.metadata["user_question"]`. Game actions pass through unchanged; the `say`
+action records to a JSONL transcript without touching the game state.
+
+```python
+from rimworld_agent.games.commentary import wrap, QueueQuestionSource
+
+source = QueueQuestionSource()
+backend = wrap("rimworld", source=source, transcript_path="results/commentary.jsonl")
+source.push("Why did you build the bed there?")
+# ...the policy answers via Action("say", {text: "...", cited_items: ["<RSID_L3_02>"]})
+```
+
+The same response-only contract from the kiosk applies — no `ask_clarification` action,
+text is question-mark stripped, and the reward shaper adds a `commentary` term that rewards
+RSID-grounded answers and applies `−2 asked_back_penalty` for any '?' that survives.
+Verbal I/O plugs in at the question source (ASR in) / transcript (TTS out) boundary.
+
+### 3b. `kiosk` — `KioskBackend` (response-only Q&A, standalone)
 
 A "shop terminal" mode where the agent **only responds** to customer questions about a
 catalog of items and **never asks** questions back. There is no game world — just a catalog
@@ -80,6 +102,9 @@ python -c "from rimworld_agent.games.base import get_backend; from rimworld_agen
 b = get_backend('kiosk', catalog_path='data/kiosk_catalog/catalog.json'); b.observe(); \
 print(b.execute(Action('lookup_price', {'item_id': 'rifle_01'})).result)"
 ```
+
+A standalone shop-terminal mode. Use the `commentary` wrapper instead when you want the user
+to ask questions *while the agent plays* another game.
 
 ### 4. `videogamebench` — `VideoGameBenchBackend`
 
