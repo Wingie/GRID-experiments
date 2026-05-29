@@ -63,7 +63,7 @@ def test_toy_backend_satisfies_protocol():
 
 def test_registry_lists_built_in_backends():
     names = list_backends()
-    for expected in ("toy", "rimworld", "eve", "videogamebench", "pokemon_red", "zelda_minish_cap"):
+    for expected in ("toy", "rimworld", "eve", "videogamebench", "pokemon_red", "zelda_minish_cap", "kiosk"):
         assert expected in names, expected
 
 

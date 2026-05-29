@@ -110,7 +110,7 @@ def _autoload() -> None:
     """Import the bundled backend modules so their factories self-register."""
     import importlib
 
-    for mod in ("rimworld", "eve", "videogamebench"):
+    for mod in ("rimworld", "eve", "videogamebench", "kiosk"):
         try:
             importlib.import_module(f"rimworld_agent.games.{mod}")
         except Exception:

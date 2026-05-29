@@ -58,7 +58,30 @@ Knowledge extraction: `extract_sde_types` reads `data/eve_sde/fsd/types.yaml` (o
 `bsd/typeIDs.yaml`) into `EVEType` records — directly compatible with the same dual
 RQ-VAE pipeline (RSIDs cluster by hull/module/ore taxonomy; WSIDs cluster by industry chain).
 
-### 3. `videogamebench` — `VideoGameBenchBackend`
+### 3. `kiosk` — `KioskBackend` (response-only Q&A)
+
+A "shop terminal" mode where the agent **only responds** to customer questions about a
+catalog of items and **never asks** questions back. There is no game world — just a catalog
+(JSON) and a queue of incoming questions. Structural enforcement of the no-asking rule is in
+the action space: there is no `ask_clarification` action, and every response goes through a
+question-mark stripper before publication.
+
+Action space (all response-shaped): `answer`, `lookup_price`, `list_items`, `recommend`,
+`inventory_query`, `wait`. Reward shaping rewards grounded citations of real catalog items
+and penalises empty responses + any question-mark in the text (`asked_back_penalty = −2`).
+Catalog items can carry their canonical `<RSID_L*_*>` address so a response that cites
+`rifle_01` also cites the same RSID the dual SID pipeline assigned to it — the same trained
+sovereign SLM can be deployed here without retraining.
+
+Verbal I/O (ASR in, TTS out) plugs in at the boundary; the backend itself is text-only.
+
+```bash
+python -c "from rimworld_agent.games.base import get_backend; from rimworld_agent.game.action_space import Action; \
+b = get_backend('kiosk', catalog_path='data/kiosk_catalog/catalog.json'); b.observe(); \
+print(b.execute(Action('lookup_price', {'item_id': 'rifle_01'})).result)"
+```
+
+### 4. `videogamebench` — `VideoGameBenchBackend`
 
 Adapter over a [VideoGameBench](https://www.videogamebench.com) gym env (Game Boy / GBA / DOS
 emulators). The benchmark default is **capped to the two headline games**:
