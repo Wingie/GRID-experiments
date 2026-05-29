@@ -1,0 +1,7 @@
+# @package game
+# EVE Online backend (ESI REST API + SDE knowledge). Character-scoped actions need an OAuth2
+# access token in $EVE_ACCESS_TOKEN; public reads work without one.
+name: eve
+character_id: null                # falls back to $EVE_CHARACTER_ID
+access_token: null                # falls back to $EVE_ACCESS_TOKEN
+sde_dir: data/eve_sde             # Static Data Export (typeIDs, groupIDs, ...)

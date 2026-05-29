@@ -1,0 +1,7 @@
+# @package game
+# Kiosk / shop terminal — response-only verbal Q&A over a catalog. No game world; the agent
+# answers questions but never asks them. Hook ASR in / TTS out at the I/O boundary for true
+# verbal operation; this config is text-only.
+name: kiosk
+catalog_path: data/kiosk_catalog/catalog.json
+questions_path: null              # optional text file, one question per line (queue source)

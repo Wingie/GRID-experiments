@@ -77,8 +77,21 @@ sanity-checks, **not** research numbers.
 
 ## Module map
 
-`rimworld_agent/{knowledge,semantic_ids,vision,game,training,eval}/` + `utils.py`. See
-`docs/ARCHITECTURE.md` for the data flow and `docs/TRAINING_GUIDE.md` for the run order.
+`rimworld_agent/{knowledge,semantic_ids,vision,game,training,eval,games,benchmarks}/` +
+`utils.py`. See `docs/ARCHITECTURE.md` for the data flow, `docs/TRAINING_GUIDE.md` for the
+run order, and `docs/GAMES.md` for the multi-game framework.
+
+## Multi-game framework
+
+`rimworld_agent/games/base.py` defines `GameBackend` (Protocol) + a `register`/`get_backend`
+registry. Bundled backends: `rimworld` (wraps existing code), `eve` (EVE Online ESI + SDE),
+`videogamebench` (Pokémon Red + Zelda: The Minish Cap headline cap). The same dual RQ-VAE +
+vision + self-play layers work across backends as soon as a new game conforms to the
+protocol. `rimworld_agent.benchmarks.videogamebench.run_benchmark` is the policy-agnostic
+cross-game runner that drives one or more backends and writes a unified per-game table.
+
+Keep backend imports lazy on the game's heavy dep (`videogamebench` package, EVE OAuth) so
+the registry's `_autoload` succeeds even when one backend is unavailable.
 
 ## Conventions & gotchas
 

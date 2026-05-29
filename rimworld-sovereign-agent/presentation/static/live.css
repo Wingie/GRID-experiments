@@ -1,0 +1,29 @@
+.subtle { color: #aaa; font-size: 0.7em; }
+.live { font-size: 0.5em; text-align: left; }
+.live .bar { color: #ccc; font-size: 0.7em; margin-bottom: 0.6em; }
+.live .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9em; }
+.live h4 { margin: 0 0 0.3em 0; font-size: 1.1em; color: #fff; }
+.live .row { display: flex; gap: 0.6em; align-items: center; }
+.live .row > div { display: flex; flex-direction: column; }
+.live .row .lbl { color: #888; font-size: 0.8em; }
+.live .row .val { font-family: monospace; font-size: 1.2em; color: #fff; }
+.live .row .val.total { color: #4ade80; }
+.live .frame { background: #1a1a1a; padding: 0.6em; border-radius: 6px; }
+.live .frame img { width: 100%; max-height: 240px; object-fit: contain; }
+.live .frame .placeholder { color: #666; padding: 2em 0; text-align: center; }
+.live .gauge { background: #1a1a1a; padding: 0.6em; border-radius: 6px; }
+.live .qpanel { background: #1a1a1a; padding: 0.6em; border-radius: 6px; display: flex; flex-direction: column; gap: 0.4em; }
+.live .qpanel label { color: #fff; font-size: 1.1em; }
+.live .qpanel input { flex: 1; padding: 0.4em; background: #111; color: #eee; border: 1px solid #333; border-radius: 4px; font-size: 1em; }
+.live .qpanel button { padding: 0.4em 0.8em; background: #4ade80; color: #111; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; }
+.live .qpanel button:disabled { background: #555; cursor: not-allowed; }
+.live .qpanel .hint { color: #888; font-size: 0.8em; margin: 0; }
+.live .transcript { background: #1a1a1a; padding: 0.6em; border-radius: 6px; max-height: 240px; overflow-y: auto; }
+.live .transcript .empty { color: #666; padding: 1em 0; text-align: center; }
+.live .transcript .entry { border-left: 2px solid #4ade80; padding-left: 0.6em; margin-bottom: 0.5em; }
+.live .transcript .q { color: #ccc; font-style: italic; }
+.live .transcript .a { color: #fff; }
+.live .transcript .cites { color: #888; font-size: 0.85em; font-family: monospace; margin-top: 0.2em; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.3em; }
+.dot.on { background: #4ade80; box-shadow: 0 0 4px #4ade80; }
+.dot.off { background: #666; }

@@ -1,0 +1,21 @@
+# @package _global_
+# Cross-game VideoGameBench benchmark — runs the policy against the headline games
+# (Pokémon Red + Zelda: The Minish Cap by default, capped per current spec) and writes
+# results/videogamebench.json.
+#   python -m rimworld_agent.benchmarks.videogamebench experiment=benchmark
+#
+# To also evaluate commentary quality (user Q&A while the agent plays), set
+# benchmark.commentary.enabled=true and supply a per-game questions file.
+
+benchmark:
+  games: [pokemon_red, zelda_minish_cap]
+  n_episodes: 5
+  max_steps: 1000
+  commentary:
+    enabled: false
+    questions:
+      # Per-game text files, one user question per line. Wraps the backend with
+      # CommentaryWrapper, surfaces questions in Observation.metadata, and reports
+      # commentary.answer_rate + mean_commentary_reward in the per-game table.
+      pokemon_red: data/questions/pokemon_red.txt
+      zelda_minish_cap: data/questions/zelda_minish_cap.txt

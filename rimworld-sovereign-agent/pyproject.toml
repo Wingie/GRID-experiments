@@ -52,6 +52,9 @@ csharp = ["tree-sitter>=0.21", "tree-sitter-c-sharp"]
 viz = ["matplotlib", "seaborn", "umap-learn", "scikit-learn", "jupyter"]
 export = ["llama-cpp-python"]
 track = ["wandb"]
+eve = ["pyyaml"]                           # SDE parsing (requests + dataclasses are in core deps)
+videogamebench = ["videogamebench", "Pillow", "gymnasium"]
+presentation = ["fastapi", "uvicorn[standard]"]   # reveal.js + live audience Q&A server
 dev = ["ruff", "pyright", "pytest", "pre-commit"]
 
 [project.urls]

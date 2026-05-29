@@ -122,6 +122,57 @@ The model emits up to 5 of these per turn after a `<REASONING>...</REASONING>` b
 - `docs/RIMWORLD_SETUP.md` — install the RIMAPI mod + screenshot capture, decompile the assembly.
 - `docs/TRAINING_GUIDE.md` — step-by-step from zero to a playing agent.
 - `docs/ARCHITECTURE.md` — full system diagram and data flow.
+- `docs/GAMES.md` — the multi-game framework (RimWorld + EVE Online + VideoGameBench).
+
+## Multi-game framework
+
+The agent is not RimWorld-specific. A small `GameBackend` protocol
+(`rimworld_agent/games/base.py`) plugs three backends into the same training + eval pipeline:
+
+- **`rimworld`** — RIMAPI client + the existing action space / reward.
+- **`eve`** — EVE Online ESI REST client + SDE knowledge parser (industry / market / skill /
+  contracts / navigation; needs `$EVE_ACCESS_TOKEN` for character-scoped actions).
+- **`videogamebench`** — emulator-backed gym envs; the default benchmark is **capped to
+  Pokémon Red and *The Legend of Zelda: The Minish Cap***. Other VGB games work via
+  `get_backend("videogamebench", game=...)`.
+
+Run the cross-game benchmark with:
+
+```bash
+python -m rimworld_agent.benchmarks.videogamebench experiment=benchmark
+#   -> results/videogamebench.json (Pokémon Red + Zelda: The Minish Cap by default)
+```
+
+See `docs/GAMES.md` for the full backend contract and how to add a new game.
+
+## Live presentation (reveal.js + Markdown + React widgets)
+
+A demo deck under `presentation/`: reveal.js loads Markdown slides, and a React grid on the
+"Live demo" slide bridges the audience to the running agent's commentary channel.
+Questions submitted in the deck land in the same `QueueQuestionSource` the agent pulls from;
+every `say` action is POSTed back into the deck via a WebSocket broadcast.
+
+```bash
+pip install -e .[presentation]
+uvicorn presentation.server:app --reload --port 8000
+# open http://127.0.0.1:8000 and navigate to the "Live demo" slide
+```
+
+Wire your agent into the deck:
+
+```python
+from presentation.server import SHARED_SOURCE, bridge_to_server
+from rimworld_agent.games.commentary import CommentaryWrapper
+from rimworld_agent.games.base import get_backend
+
+backend = CommentaryWrapper(
+    get_backend("rimworld"),
+    source=SHARED_SOURCE,
+    on_say=bridge_to_server("http://127.0.0.1:8000"),
+)
+```
+
+See `presentation/README.md` for the full endpoint list and slide source layout.
 
 ## Tests
 
