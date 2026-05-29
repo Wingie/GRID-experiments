@@ -145,6 +145,35 @@ python -m rimworld_agent.benchmarks.videogamebench experiment=benchmark
 
 See `docs/GAMES.md` for the full backend contract and how to add a new game.
 
+## Live presentation (reveal.js + Markdown + React widgets)
+
+A demo deck under `presentation/`: reveal.js loads Markdown slides, and a React grid on the
+"Live demo" slide bridges the audience to the running agent's commentary channel.
+Questions submitted in the deck land in the same `QueueQuestionSource` the agent pulls from;
+every `say` action is POSTed back into the deck via a WebSocket broadcast.
+
+```bash
+pip install -e .[presentation]
+uvicorn presentation.server:app --reload --port 8000
+# open http://127.0.0.1:8000 and navigate to the "Live demo" slide
+```
+
+Wire your agent into the deck:
+
+```python
+from presentation.server import SHARED_SOURCE, bridge_to_server
+from rimworld_agent.games.commentary import CommentaryWrapper
+from rimworld_agent.games.base import get_backend
+
+backend = CommentaryWrapper(
+    get_backend("rimworld"),
+    source=SHARED_SOURCE,
+    on_say=bridge_to_server("http://127.0.0.1:8000"),
+)
+```
+
+See `presentation/README.md` for the full endpoint list and slide source layout.
+
 ## Tests
 
 ```bash

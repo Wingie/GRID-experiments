@@ -110,7 +110,11 @@ class CommentaryWrapper:
         inner: GameBackend,
         source: QuestionSource | None = None,
         transcript_path: str | Path | None = None,
+        on_say=None,
     ):
+        """``on_say(entry)`` fires after every recorded response — used to bridge the
+        running agent into a live presentation server (or any other live consumer).
+        """
         self.inner = inner
         self.source: QuestionSource = source or QueueQuestionSource()
         self.transcript_path = Path(transcript_path) if transcript_path else None
@@ -118,6 +122,7 @@ class CommentaryWrapper:
         self.current_question: str | None = None
         self.last_response: dict | None = None
         self.last_question: str = ""
+        self.on_say = on_say
 
     @property
     def name(self) -> str:
@@ -157,6 +162,11 @@ class CommentaryWrapper:
         self.last_question = self.current_question or ""
         self.last_response = response
         self.current_question = None  # done; observe() pulls the next one
+        if self.on_say is not None:
+            try:
+                self.on_say(entry)
+            except Exception as exc:  # never fail the game loop on a notify error
+                log.warning("on_say notifier raised %s", exc)
         return ExecutionResult(ok=True, result=response)
 
     def reward(self, prev: Observation, curr: Observation, actions: list[Action]) -> dict[str, float]:

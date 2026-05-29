@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sovereign Game Agents — live demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css" id="theme" />
+  <link rel="stylesheet" href="static/live.css" />
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <!-- Slides are loaded from /slides/*.md by the reveal.js Markdown plugin via a
+           manifest. Each section's `data-markdown` attribute is the slide source. -->
+      <section data-markdown="slides/00-intro.md"        data-separator="^\n---\n$" data-separator-vertical="^\n--\n$"></section>
+      <section data-markdown="slides/01-sovereign.md"    data-separator="^\n---\n$" data-separator-vertical="^\n--\n$"></section>
+      <section data-markdown="slides/02-dual-sid.md"     data-separator="^\n---\n$" data-separator-vertical="^\n--\n$"></section>
+      <section data-markdown="slides/03-multi-game.md"   data-separator="^\n---\n$" data-separator-vertical="^\n--\n$"></section>
+      <section data-markdown="slides/04-commentary.md"   data-separator="^\n---\n$" data-separator-vertical="^\n--\n$"></section>
+
+      <!-- Live demo slide: reveal renders the HTML inside this section verbatim; the
+           React widgets mount into the marked div on slide change. -->
+      <section>
+        <h2>Live demo</h2>
+        <p class="subtle">audience questions stream into the running agent's commentary channel</p>
+        <div id="live-demo-root"></div>
+      </section>
+
+      <section data-markdown="slides/05-closing.md"      data-separator="^\n---\n$" data-separator-vertical="^\n--\n$"></section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/htm@3.1.1/dist/htm.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: 'c/t',
+      plugins: [ RevealMarkdown, RevealHighlight ],
+    });
+  </script>
+  <script src="static/live.js"></script>
+</body>
+</html>
