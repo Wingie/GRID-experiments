@@ -52,3 +52,32 @@ def test_run_benchmark_skips_unimportable_backends():
     result = run_benchmark(_fixed_policy, games=["pokemon_red", "toy"], n_episodes=1, max_steps=1)
     assert "error" in result["games"]["pokemon_red"]
     assert "mean_reward" in result["games"]["toy"]
+
+
+def _commentary_policy(obs):
+    """Tick the game; when a user question is pending, answer it via `say`."""
+    actions = [Action("tick")]
+    q = (obs.metadata or {}).get("user_question", "")
+    if q:
+        actions.append(Action("say", {"text": f"observation cites <RSID_L1_00>: {q[:20]}."}))
+    return "test", actions
+
+
+def test_run_benchmark_with_commentary(tmp_path):
+    qfile = tmp_path / "toy.txt"
+    qfile.write_text("Why did you tick?\nWhat is that?\n")
+    result = run_benchmark(
+        _commentary_policy,
+        games=["toy"],
+        n_episodes=2,
+        max_steps=4,
+        commentary_questions={"toy": qfile},
+    )
+    assert result["commentary_enabled"] is True
+    row = result["games"]["toy"]
+    # CommentaryWrapper adds a `commentary` term -> total reward > inner gameplay reward.
+    assert row["mean_reward"] > 4.0  # 4 game ticks + commentary bonus per answered question
+    c = row["commentary"]
+    assert c["questions_received"] >= 1
+    assert c["answered"] >= c["questions_received"]   # policy answers each pending question
+    assert c["mean_commentary_reward"] > 0.0

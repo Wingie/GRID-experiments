@@ -139,6 +139,34 @@ The runner is **policy-agnostic**: it takes any `policy(obs) -> (reasoning, acti
 same trained sovereign SLM can be benchmarked across RimWorld, EVE, and the VGB titles
 without bespoke glue.
 
+### Commentary at benchmark time
+
+Set `benchmark.commentary.enabled=true` and supply a per-game questions file to wrap each
+backend with `CommentaryWrapper` while the benchmark runs. Questions are pulled from the
+file (one per line) and surfaced through `Observation.metadata["user_question"]`; the policy
+can interleave game actions with `say` to answer mid-play. The per-game table grows a
+`commentary` block:
+
+```json
+"pokemon_red": {
+  "mean_reward": 47.3, "best_reward": 71.0, ...,
+  "commentary": {
+    "questions_received": 18,
+    "answered": 17,
+    "answer_rate": 0.944,
+    "mean_commentary_reward": 1.62
+  }
+}
+```
+
+The same `−2 asked_back_penalty` / `+1 rsid_grounded` shaping from the wrapper drives that
+mean, so a policy is rewarded for grounded, ungrudging answers and penalised for asking back.
+
+```bash
+python -m rimworld_agent.benchmarks.videogamebench experiment=benchmark \
+  benchmark.commentary.enabled=true
+```
+
 ## Adding a new game
 
 1. Drop a module at `rimworld_agent/games/<game>.py`.
