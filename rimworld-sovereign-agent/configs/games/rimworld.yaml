@@ -1,0 +1,6 @@
+# @package game
+# RimWorld backend (the existing RIMAPI flow).
+name: rimworld
+rimapi_url: http://127.0.0.1:7860
+scenario: crashlanded
+difficulty: peaceful           # gotcha #6 - start simple

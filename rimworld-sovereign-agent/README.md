@@ -122,6 +122,28 @@ The model emits up to 5 of these per turn after a `<REASONING>...</REASONING>` b
 - `docs/RIMWORLD_SETUP.md` — install the RIMAPI mod + screenshot capture, decompile the assembly.
 - `docs/TRAINING_GUIDE.md` — step-by-step from zero to a playing agent.
 - `docs/ARCHITECTURE.md` — full system diagram and data flow.
+- `docs/GAMES.md` — the multi-game framework (RimWorld + EVE Online + VideoGameBench).
+
+## Multi-game framework
+
+The agent is not RimWorld-specific. A small `GameBackend` protocol
+(`rimworld_agent/games/base.py`) plugs three backends into the same training + eval pipeline:
+
+- **`rimworld`** — RIMAPI client + the existing action space / reward.
+- **`eve`** — EVE Online ESI REST client + SDE knowledge parser (industry / market / skill /
+  contracts / navigation; needs `$EVE_ACCESS_TOKEN` for character-scoped actions).
+- **`videogamebench`** — emulator-backed gym envs; the default benchmark is **capped to
+  Pokémon Red and *The Legend of Zelda: The Minish Cap***. Other VGB games work via
+  `get_backend("videogamebench", game=...)`.
+
+Run the cross-game benchmark with:
+
+```bash
+python -m rimworld_agent.benchmarks.videogamebench experiment=benchmark
+#   -> results/videogamebench.json (Pokémon Red + Zelda: The Minish Cap by default)
+```
+
+See `docs/GAMES.md` for the full backend contract and how to add a new game.
 
 ## Tests
 

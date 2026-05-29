@@ -1,0 +1,10 @@
+# @package _global_
+# Cross-game VideoGameBench benchmark — runs the policy against the headline games
+# (Pokémon Red + Zelda: The Minish Cap by default, capped per current spec) and writes
+# results/videogamebench.json.
+#   python -m rimworld_agent.benchmarks.videogamebench experiment=benchmark
+
+benchmark:
+  games: [pokemon_red, zelda_minish_cap]
+  n_episodes: 5
+  max_steps: 1000

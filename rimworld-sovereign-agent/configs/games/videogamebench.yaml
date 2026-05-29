@@ -1,0 +1,7 @@
+# @package game
+# VideoGameBench backend. Default to the Pokémon Red + Zelda: The Minish Cap headline pair;
+# benchmark.games may extend this list with any VGB-supported title.
+name: videogamebench
+game: pokemon_red                 # primary game id for one-shot runs
+render_mode: rgb_array
+frame_dir: null                   # null -> tempdir
